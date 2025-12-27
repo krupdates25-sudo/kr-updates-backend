@@ -433,18 +433,43 @@ const searchPosts = catchAsync(async (req, res, next) => {
 
 // Get post by slug
 const getPostBySlug = catchAsync(async (req, res, next) => {
-  const post = await Post.findOne({
-    slug: req.params.slug,
-    status: "published",
+  const { slug } = req.params;
+  
+  // Check if slug is actually a MongoDB ObjectId (24 hex characters)
+  const isObjectId = /^[0-9a-fA-F]{24}$/.test(slug);
+  
+  // Build query - handle both slug and ID lookups
+  const query = {
     isActive: true,
-  }).populate("author", "username firstName lastName profileImage");
+  };
+  
+  if (isObjectId) {
+    // If it's an ObjectId, search by _id
+    query._id = slug;
+  } else {
+    // Otherwise, search by slug
+    query.slug = slug;
+  }
+
+  // Non-admin users can only see published posts
+  // Admin users can see both published and draft posts
+  if (req.user?.role !== "admin") {
+    query.status = "published";
+  }
+
+  const post = await Post.findOne(query).populate(
+    "author",
+    "username firstName lastName profileImage"
+  );
 
   if (!post) {
     return next(new AppError("Post not found", 404));
   }
 
-  // Increment view count
-  await post.incrementViewCount();
+  // Only increment view count for published posts
+  if (post.status === "published") {
+    await post.incrementViewCount();
+  }
 
   ApiResponse.success(res, post, "Post retrieved successfully");
 });
@@ -463,6 +488,9 @@ const createPost = catchAsync(async (req, res, next) => {
     title,
     content,
     excerpt,
+    description,
+    subheading,
+    reporterName,
     category,
     tags,
     featuredImage,
@@ -478,9 +506,21 @@ const createPost = catchAsync(async (req, res, next) => {
     status: "draft", // Always start as draft
   };
 
+  // Add subheading (accept both 'description' and 'subheading' from frontend)
+  if (subheading && subheading.trim()) {
+    postData.subheading = subheading.trim();
+  } else if (description && description.trim()) {
+    postData.subheading = description.trim();
+  }
+
   // Add optional fields if provided
   if (excerpt && excerpt.trim()) {
     postData.excerpt = excerpt.trim();
+  }
+
+  // Add reporter name if provided
+  if (reporterName && reporterName.trim()) {
+    postData.reporterName = reporterName.trim();
   }
 
   if (tags && Array.isArray(tags) && tags.length > 0) {
@@ -506,18 +546,26 @@ const createPost = catchAsync(async (req, res, next) => {
     };
   }
 
-  // Check if user can publish posts
+  // Role-based publishing workflow
+  // Only Admin can publish directly
+  // IMPORTANT: Force status based on user role - non-admins CANNOT publish
+  // Even if they send status: "published", we override it to "draft"
+  const requestedStatus = req.body.status;
+  
   if (req.user.role === "admin") {
-    // Admin can always publish
-    postData.status = "published";
-    postData.publishedAt = new Date();
-  } else if (req.user.canPublish) {
-    // User with publishing permission (including moderators)
-    postData.status = "published";
-    postData.publishedAt = new Date();
+    // Only Admin can publish directly
+    if (requestedStatus === "published") {
+      postData.status = "published";
+      postData.publishedAt = new Date();
+    } else {
+      postData.status = "draft";
+    }
   } else {
-    // User cannot publish, force to draft
+    // Moderator, Sub-admin, and other roles: ALWAYS force to draft
+    // They cannot publish directly - must be approved by Admin
+    // Override any status they might have sent
     postData.status = "draft";
+    postData.publishedAt = null; // Ensure no publish date
   }
 
   // Create the post
@@ -526,10 +574,65 @@ const createPost = catchAsync(async (req, res, next) => {
   // Populate author info for response
   await post.populate("author", "username firstName lastName profileImage");
 
+  // If post is draft and created by non-admin, notify Admin for review
+  if (postData.status === "draft" && req.user.role !== "admin") {
+    try {
+      // Find all admin users
+      const User = require("../models/User");
+      const Announcement = require("../models/Announcement");
+      const admins = await User.find({ role: "admin", isActive: true });
+
+      if (admins.length > 0) {
+        // Create announcement notification for all admins
+        const announcement = await Announcement.create({
+          title: "Post Review Request",
+          message: `${req.user.firstName || req.user.username} (${req.user.role}) submitted a post for review: "${post.title}"`,
+          type: "info",
+          priority: "high",
+          targetAudience: "admin",
+          createdBy: req.user._id,
+          startDate: new Date(),
+          endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+          icon: "alert",
+          actionUrl: `/post/${post._id}`, // Use /post/ for frontend route
+          actionText: "Review Post",
+          isActive: true,
+        });
+
+        // Send real-time notification to admins via Socket.IO
+        if (global.io) {
+          const notificationData = {
+            type: "post_review_request",
+            message: `${req.user.firstName || req.user.username} submitted a post for review: "${post.title}"`,
+            postId: post._id,
+            postTitle: post.title,
+            announcementId: announcement._id,
+            author: {
+              _id: req.user._id,
+              firstName: req.user.firstName,
+              lastName: req.user.lastName,
+              username: req.user.username,
+              role: req.user.role,
+            },
+            timestamp: new Date(),
+          };
+
+          // Emit to all admin users
+          admins.forEach((admin) => {
+            global.io.to(`user_${admin._id}`).emit("notification", notificationData);
+          });
+        }
+      }
+    } catch (notificationError) {
+      // Log error but don't fail the post creation
+      console.error("Error sending admin notification:", notificationError);
+    }
+  }
+
   const message =
     postData.status === "published"
       ? "Post created and published successfully"
-      : "Post created as draft successfully";
+      : "Post created as draft and submitted for review. Admin will review and publish it.";
 
   ApiResponse.success(res, post, message, 201);
 });
@@ -554,7 +657,7 @@ const updatePost = catchAsync(async (req, res, next) => {
   }
 
   const { id } = req.params;
-  const { title, content, excerpt, category, tags, featuredImage } = req.body;
+  const { title, content, excerpt, description, subheading, reporterName, category, tags, featuredImage, status, authorDisplayName } = req.body;
 
   // Find the post
   const post = await Post.findById(id);
@@ -562,7 +665,7 @@ const updatePost = catchAsync(async (req, res, next) => {
     return next(new AppError("Post not found", 404));
   }
 
-  // Check ownership (authors can only edit their own posts)
+  // Check ownership (authors can only edit their own posts, unless user is admin/moderator)
   if (
     req.user.role === "author" &&
     post.author.toString() !== req.user._id.toString()
@@ -574,6 +677,14 @@ const updatePost = catchAsync(async (req, res, next) => {
   const updateData = {};
   if (title) updateData.title = title.trim();
   if (content) updateData.content = content.trim();
+  
+  // Handle subheading (accept both 'description' and 'subheading' from frontend)
+  if (subheading !== undefined) {
+    updateData.subheading = subheading ? subheading.trim() : "";
+  } else if (description !== undefined) {
+    updateData.subheading = description ? description.trim() : "";
+  }
+  
   if (excerpt !== undefined) updateData.excerpt = excerpt ? excerpt.trim() : "";
   if (category) updateData.category = category;
 
@@ -594,13 +705,59 @@ const updatePost = catchAsync(async (req, res, next) => {
         : undefined;
   }
 
+  // Allow admin to set custom author display name
+  if (authorDisplayName !== undefined && req.user.role === "admin") {
+    const trimmedName = authorDisplayName ? authorDisplayName.trim() : "";
+    // Allow empty string to clear the custom display name (will fallback to author's real name)
+    updateData.authorDisplayName = trimmedName || null;
+  }
+
+  // Allow admin to set reporter name (News by)
+  if (reporterName !== undefined && req.user.role === "admin") {
+    const trimmedName = reporterName ? reporterName.trim() : "";
+    // Allow empty string to clear the reporter name
+    updateData.reporterName = trimmedName || null;
+  }
+
+  // IMPORTANT: Handle status updates - Only Admin can publish posts
+  // Non-admin users (moderator, sub-admin) cannot change status to published
+  if (status !== undefined) {
+    if (status === "published") {
+      // Only Admin can publish posts
+      if (req.user.role !== "admin") {
+        return next(new AppError("Only Admin can publish posts. Your post will remain as draft until approved.", 403));
+      }
+      updateData.status = "published";
+      updateData.publishedAt = new Date();
+    } else if (status === "draft") {
+      // Anyone can set to draft
+      updateData.status = "draft";
+      updateData.publishedAt = null;
+    } else {
+      return next(new AppError("Invalid status. Must be 'draft' or 'published'", 400));
+    }
+  }
+
+  // Check if there's anything to update
+  if (Object.keys(updateData).length === 0) {
+    return next(new AppError("No fields to update", 400));
+  }
+
   // Update the post
   const updatedPost = await Post.findByIdAndUpdate(id, updateData, {
     new: true,
     runValidators: true,
   }).populate("author", "username firstName lastName profileImage");
 
-  ApiResponse.success(res, updatedPost, "Post updated successfully");
+  if (!updatedPost) {
+    return next(new AppError("Post not found after update", 404));
+  }
+
+  const message = updateData.status === "published"
+    ? "Post published successfully"
+    : "Post updated successfully";
+
+  ApiResponse.success(res, updatedPost, message);
 });
 
 // Delete post (protected)
@@ -692,20 +849,127 @@ const promotePost = catchAsync(async (req, res, next) => {
 });
 
 const setTrending = catchAsync(async (req, res, next) => {
-  const post = await Post.findByIdAndUpdate(
-    req.params.id,
-    { isTrending: !post.isTrending },
-    { new: true, runValidators: true },
-  );
+  const { id } = req.params;
+  const { isTrending } = req.body; // Allow explicit true/false, or toggle if not provided
 
+  // Find the post first
+  const post = await Post.findById(id);
   if (!post) {
     return next(new AppError("Post not found", 404));
   }
 
+  // Determine new trending status
+  const newTrendingStatus = isTrending !== undefined ? isTrending : !post.isTrending;
+
+  // Update the post
+  const updatedPost = await Post.findByIdAndUpdate(
+    id,
+    { isTrending: newTrendingStatus },
+    { new: true, runValidators: true },
+  ).populate("author", "username firstName lastName profileImage");
+
   ApiResponse.success(
     res,
-    post,
-    `Post ${post.isTrending ? "set as trending" : "removed from trending"} successfully`,
+    updatedPost,
+    `Post ${updatedPost.isTrending ? "set as trending" : "removed from trending"} successfully`,
+  );
+});
+
+// Get all trending posts (admin view with filters)
+const getAdminTrendingPosts = catchAsync(async (req, res, next) => {
+  const { page = 1, limit = 20, status, search, sortBy = "createdAt" } = req.query;
+
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+  const limitNum = parseInt(limit);
+
+  // Build query
+  let query = { isTrending: true };
+
+  // Filter by status if provided
+  if (status) {
+    query.status = status;
+  } else {
+    // Default: show all statuses for admin
+    query.status = { $in: ["published", "draft"] };
+  }
+
+  // Search filter
+  if (search) {
+    query.$or = [
+      { title: { $regex: search, $options: "i" } },
+      { content: { $regex: search, $options: "i" } },
+      { excerpt: { $regex: search, $options: "i" } },
+    ];
+  }
+
+  // Sort options
+  const sortOptions = {};
+  switch (sortBy) {
+    case "views":
+      sortOptions.viewCount = -1;
+      break;
+    case "likes":
+      sortOptions.likeCount = -1;
+      break;
+    case "shares":
+      sortOptions.shareCount = -1;
+      break;
+    case "createdAt":
+    default:
+      sortOptions.createdAt = -1;
+      break;
+  }
+
+  const posts = await Post.find(query)
+    .populate("author", "username firstName lastName profileImage")
+    .sort(sortOptions)
+    .skip(skip)
+    .limit(limitNum);
+
+  const totalCount = await Post.countDocuments(query);
+
+  const totalPages = Math.ceil(totalCount / limitNum);
+
+  ApiResponse.success(
+    res,
+    {
+      data: posts,
+      pagination: {
+        page: parseInt(page),
+        limit: limitNum,
+        totalCount,
+        totalPages,
+        hasMore: parseInt(page) < totalPages,
+      },
+    },
+    "Trending posts retrieved successfully",
+  );
+});
+
+// Bulk set trending status
+const bulkSetTrending = catchAsync(async (req, res, next) => {
+  const { postIds, isTrending } = req.body;
+
+  if (!Array.isArray(postIds) || postIds.length === 0) {
+    return next(new AppError("postIds must be a non-empty array", 400));
+  }
+
+  if (typeof isTrending !== "boolean") {
+    return next(new AppError("isTrending must be a boolean", 400));
+  }
+
+  const result = await Post.updateMany(
+    { _id: { $in: postIds } },
+    { isTrending },
+  );
+
+  ApiResponse.success(
+    res,
+    {
+      matched: result.matchedCount,
+      modified: result.modifiedCount,
+    },
+    `${result.modifiedCount} posts ${isTrending ? "set as" : "removed from"} trending successfully`,
   );
 });
 
@@ -967,18 +1231,39 @@ const getPostLikes = catchAsync(async (req, res, next) => {
 
 // Get post details by ID (for modal)
 const getPostById = catchAsync(async (req, res, next) => {
-  const post = await Post.findOne({
-    _id: req.params.id,
-    status: "published",
+  const { id } = req.params;
+  
+  // Validate ObjectId format
+  const isObjectId = /^[0-9a-fA-F]{24}$/.test(id);
+  if (!isObjectId) {
+    return next(new AppError("Invalid post ID format", 400));
+  }
+
+  // Build query - admin can view draft posts, others can only view published
+  const query = {
+    _id: id,
     isActive: true,
-  }).populate("author", "username firstName lastName profileImage");
+  };
+
+  // Non-admin users can only see published posts
+  // Admin users can see both published and draft posts
+  if (req.user?.role !== "admin") {
+    query.status = "published";
+  }
+
+  const post = await Post.findOne(query).populate(
+    "author",
+    "username firstName lastName profileImage"
+  );
 
   if (!post) {
     return next(new AppError("Post not found", 404));
   }
 
-  // Increment view count
-  await post.incrementViewCount();
+  // Only increment view count for published posts
+  if (post.status === "published") {
+    await post.incrementViewCount();
+  }
 
   // Add like status if user is authenticated
   const postWithLikeStatus = await addLikeStatusToPosts([post], req.user?._id);
@@ -1473,6 +1758,8 @@ module.exports = {
   featurePost,
   promotePost,
   setTrending,
+  getAdminTrendingPosts,
+  bulkSetTrending,
   togglePostVisibility,
   toggleLike,
   checkLikeStatus,

@@ -4,7 +4,7 @@ const { validationResult } = require("express-validator");
 // Get all breaking news stories
 const getAllStories = async (req, res) => {
   try {
-    const { active, expired, category } = req.query;
+    const { active, expired, category, page = 1, limit = 20, search, sortBy = "createdAt" } = req.query;
     let query = {};
 
     if (active === "true") {
@@ -18,14 +18,53 @@ const getAllStories = async (req, res) => {
       query.category = category;
     }
 
+    // Search filter
+    if (search) {
+      query.$or = [
+        { title: { $regex: search, $options: "i" } },
+        { excerpt: { $regex: search, $options: "i" } },
+        { content: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    // Sort options
+    const sortOptions = {};
+    switch (sortBy) {
+      case "priority":
+        sortOptions.priority = -1;
+        break;
+      case "expiresAt":
+        sortOptions.expiresAt = 1;
+        break;
+      case "createdAt":
+      default:
+        sortOptions.createdAt = -1;
+        break;
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const limitNum = parseInt(limit);
+
     const stories = await BreakingNews.find(query)
       .populate("createdBy", "username firstName lastName profileImage")
       .populate("updatedBy", "username firstName lastName profileImage")
-      .sort({ priority: -1, createdAt: -1 });
+      .sort(sortOptions)
+      .skip(skip)
+      .limit(limitNum);
+
+    const totalCount = await BreakingNews.countDocuments(query);
+    const totalPages = Math.ceil(totalCount / limitNum);
 
     res.status(200).json({
       success: true,
       data: stories,
+      pagination: {
+        page: parseInt(page),
+        limit: limitNum,
+        totalCount,
+        totalPages,
+        hasMore: parseInt(page) < totalPages,
+      },
       count: stories.length,
     });
   } catch (error) {
@@ -33,6 +72,154 @@ const getAllStories = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Error fetching breaking news stories",
+      error: error.message,
+    });
+  }
+};
+
+// Get admin view of all breaking news (with all statuses)
+const getAdminStories = async (req, res) => {
+  try {
+    const { page = 1, limit = 20, search, category, isActive, sortBy = "createdAt" } = req.query;
+    let query = {};
+
+    // Filter by active status
+    if (isActive !== undefined) {
+      query.isActive = isActive === "true";
+    }
+
+    // Filter by category
+    if (category) {
+      query.category = category;
+    }
+
+    // Search filter
+    if (search) {
+      query.$or = [
+        { title: { $regex: search, $options: "i" } },
+        { excerpt: { $regex: search, $options: "i" } },
+        { content: { $regex: search, $options: "i" } },
+      ];
+    }
+
+    // Sort options
+    const sortOptions = {};
+    switch (sortBy) {
+      case "priority":
+        sortOptions.priority = -1;
+        break;
+      case "expiresAt":
+        sortOptions.expiresAt = 1;
+        break;
+      case "createdAt":
+      default:
+        sortOptions.createdAt = -1;
+        break;
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const limitNum = parseInt(limit);
+
+    const stories = await BreakingNews.find(query)
+      .populate("createdBy", "username firstName lastName profileImage")
+      .populate("updatedBy", "username firstName lastName profileImage")
+      .sort(sortOptions)
+      .skip(skip)
+      .limit(limitNum);
+
+    const totalCount = await BreakingNews.countDocuments(query);
+    const totalPages = Math.ceil(totalCount / limitNum);
+
+    res.status(200).json({
+      success: true,
+      data: stories,
+      pagination: {
+        page: parseInt(page),
+        limit: limitNum,
+        totalCount,
+        totalPages,
+        hasMore: parseInt(page) < totalPages,
+      },
+      count: stories.length,
+    });
+  } catch (error) {
+    console.error("Error fetching admin breaking news stories:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching admin breaking news stories",
+      error: error.message,
+    });
+  }
+};
+
+// Bulk update breaking news status
+const bulkUpdateStories = async (req, res) => {
+  try {
+    const { storyIds, isActive } = req.body;
+
+    if (!Array.isArray(storyIds) || storyIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "storyIds must be a non-empty array",
+      });
+    }
+
+    if (typeof isActive !== "boolean") {
+      return res.status(400).json({
+        success: false,
+        message: "isActive must be a boolean",
+      });
+    }
+
+    const result = await BreakingNews.updateMany(
+      { _id: { $in: storyIds } },
+      { isActive, updatedBy: req.user.id },
+    );
+
+    res.status(200).json({
+      success: true,
+      message: `${result.modifiedCount} stories ${isActive ? "activated" : "deactivated"} successfully`,
+      data: {
+        matched: result.matchedCount,
+        modified: result.modifiedCount,
+      },
+    });
+  } catch (error) {
+    console.error("Error bulk updating breaking news stories:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error bulk updating breaking news stories",
+      error: error.message,
+    });
+  }
+};
+
+// Bulk delete breaking news stories
+const bulkDeleteStories = async (req, res) => {
+  try {
+    const { storyIds } = req.body;
+
+    if (!Array.isArray(storyIds) || storyIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "storyIds must be a non-empty array",
+      });
+    }
+
+    const result = await BreakingNews.deleteMany({ _id: { $in: storyIds } });
+
+    res.status(200).json({
+      success: true,
+      message: `${result.deletedCount} stories deleted successfully`,
+      data: {
+        deleted: result.deletedCount,
+      },
+    });
+  } catch (error) {
+    console.error("Error bulk deleting breaking news stories:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error bulk deleting breaking news stories",
       error: error.message,
     });
   }
@@ -337,6 +524,7 @@ const extendStoryExpiry = async (req, res) => {
 
 module.exports = {
   getAllStories,
+  getAdminStories,
   getActiveStories,
   getStoryById,
   createStory,
@@ -344,4 +532,6 @@ module.exports = {
   deleteStory,
   toggleStoryStatus,
   extendStoryExpiry,
+  bulkUpdateStories,
+  bulkDeleteStories,
 };

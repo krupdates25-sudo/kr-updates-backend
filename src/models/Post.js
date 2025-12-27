@@ -10,6 +10,11 @@ const postSchema = new mongoose.Schema(
       minlength: [5, "Title must be at least 5 characters long"],
       maxlength: [200, "Title cannot exceed 200 characters"],
     },
+    subheading: {
+      type: String,
+      trim: true,
+      maxlength: [200, "Subheading cannot exceed 200 characters"],
+    },
     slug: {
       type: String,
       unique: true,
@@ -31,6 +36,17 @@ const postSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: [true, "Author is required"],
+    },
+    authorDisplayName: {
+      type: String,
+      trim: true,
+      maxlength: [100, "Author display name cannot exceed 100 characters"],
+    },
+    reporterName: {
+      type: String,
+      trim: true,
+      maxlength: [100, "Reporter name cannot exceed 100 characters"],
+      comment: "Name of the reporter/news by - can be edited by admin",
     },
     featuredImage: {
       url: {
@@ -211,7 +227,7 @@ postSchema.virtual("likes", {
 });
 
 // Indexes for better query performance
-postSchema.index({ title: "text", content: "text", excerpt: "text" });
+postSchema.index({ title: "text", content: "text", excerpt: "text", subheading: "text" });
 postSchema.index({ author: 1, createdAt: -1 });
 postSchema.index({ status: 1, publishedAt: -1 });
 postSchema.index({ category: 1, status: 1 });
@@ -223,15 +239,49 @@ postSchema.index({ likeCount: -1 });
 
 // Pre-save middleware to generate slug
 postSchema.pre("save", function (next) {
+  // Generate slug if title is modified and slug doesn't exist
   if (this.isModified("title") && !this.slug) {
-    this.slug = this.title
+    // Try to create slug from title (keep ASCII alphanumeric and spaces only)
+    let slug = this.title
       .toLowerCase()
-      .replace(/[^a-zA-Z0-9 ]/g, "")
-      .replace(/\s+/g, "-")
-      .trim("-");
+      .replace(/[^a-zA-Z0-9 ]/g, "") // Remove non-ASCII characters
+      .replace(/\s+/g, "-") // Replace spaces with dashes
+      .replace(/-+/g, "-") // Replace multiple dashes with single dash
+      .replace(/^-+|-+$/g, ""); // Remove leading/trailing dashes
 
-    // Add timestamp to ensure uniqueness
-    this.slug += "-" + Date.now();
+    // If slug is empty or invalid (title had no ASCII characters), use _id
+    // MongoDB _id is available in pre-save hook
+    if (!slug || slug.length === 0) {
+      // Use the MongoDB _id as slug (it's a 24-character hex string, URL-safe)
+      this.slug = this._id ? this._id.toString() : `post-${Date.now()}`;
+    } else {
+      // Add timestamp to ensure uniqueness
+      this.slug = `${slug}-${Date.now()}`;
+    }
+  }
+  
+  // Ensure slug always exists (fallback for edge cases)
+  if (!this.slug) {
+    this.slug = this._id ? this._id.toString() : `post-${Date.now()}`;
+  }
+  
+  next();
+});
+
+// Post-save middleware to fix malformed slugs (starting with -- or empty)
+postSchema.post("save", function (doc, next) {
+  // Fix malformed slugs that start with -- or are invalid
+  if (doc.slug && (doc.slug.startsWith("--") || /^-+$/.test(doc.slug) || doc.slug.length === 0)) {
+    // Use _id as slug for malformed slugs
+    doc.slug = doc._id.toString();
+    // Save without validation to avoid infinite loop
+    doc.constructor.updateOne(
+      { _id: doc._id },
+      { $set: { slug: doc.slug } },
+      { runValidators: false }
+    ).catch((err) => {
+      console.error(`Error fixing malformed slug for post ${doc._id}:`, err);
+    });
   }
   next();
 });

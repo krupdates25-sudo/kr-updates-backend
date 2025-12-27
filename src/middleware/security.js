@@ -223,7 +223,14 @@ const corsOptions = {
       );
     }
 
-    if (allowedOrigins.includes(origin)) {
+    // Allow ngrok URLs (for testing WhatsApp/Facebook previews)
+    const isNgrok = origin && (
+      origin.includes('ngrok-free.app') ||
+      origin.includes('ngrok.io') ||
+      origin.includes('ngrok.app')
+    );
+
+    if (allowedOrigins.includes(origin) || isNgrok) {
       callback(null, true);
     } else {
       console.warn(`CORS blocked origin: ${origin}`);

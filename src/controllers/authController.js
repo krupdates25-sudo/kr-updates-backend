@@ -89,16 +89,19 @@ const logActivity = async (data, req = null) => {
 };
 
 // Helper function to create and send JWT token
+// Token expires in 7 days, cookie expires in 7 days
 const createSendToken = (user, statusCode, res, message = "Success") => {
   const token = user.getSignedJwtToken();
 
+  // Calculate 7 days in milliseconds
+  const sevenDaysInMs = 7 * 24 * 60 * 60 * 1000;
+
   const cookieOptions = {
-    expires: new Date(
-      Date.now() + config.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000,
-    ),
+    expires: new Date(Date.now() + sevenDaysInMs), // 7 days cookie expiry
     httpOnly: true,
     secure: config.NODE_ENV === "production",
     sameSite: "strict",
+    maxAge: sevenDaysInMs, // Also set maxAge for better browser compatibility
   };
 
   res.cookie("jwt", token, cookieOptions);

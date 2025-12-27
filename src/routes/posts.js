@@ -1,6 +1,7 @@
 const express = require("express");
 const { body } = require("express-validator");
 const postController = require("../controllers/postController");
+const ogController = require("../controllers/ogController");
 const { protect, restrictTo, optionalAuth } = require("../middleware/auth");
 const { apiLimiter } = require("../middleware/security");
 
@@ -96,6 +97,8 @@ router.get(
 );
 router.get("/search", optionalAuth, postController.searchPosts);
 router.get("/details/:id", optionalAuth, postController.getPostById);
+// Open Graph route for bots (must be before /:slug route)
+router.get("/og/:slug", ogController.getPostOG);
 router.get("/:slug", optionalAuth, postController.getPostBySlug);
 
 // Comments can be viewed without authentication
@@ -162,6 +165,17 @@ router.patch(
   "/:id/trending",
   restrictTo("admin", "moderator"),
   postController.setTrending,
+);
+// Admin trending posts management
+router.get(
+  "/admin/trending",
+  restrictTo("admin", "moderator"),
+  postController.getAdminTrendingPosts,
+);
+router.patch(
+  "/admin/trending/bulk",
+  restrictTo("admin", "moderator"),
+  postController.bulkSetTrending,
 );
 router.patch(
   "/:id/visibility",

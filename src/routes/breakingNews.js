@@ -4,6 +4,7 @@ const { body } = require("express-validator");
 const { protect, restrictTo } = require("../middleware/auth");
 const {
   getAllStories,
+  getAdminStories,
   getActiveStories,
   getStoryById,
   createStory,
@@ -11,6 +12,8 @@ const {
   deleteStory,
   toggleStoryStatus,
   extendStoryExpiry,
+  bulkUpdateStories,
+  bulkDeleteStories,
 } = require("../controllers/breakingNewsController");
 
 // Validation rules
@@ -82,6 +85,23 @@ router.use(protect);
 
 // Get all stories (with filters)
 router.get("/", getAllStories);
+
+// Admin routes for breaking news management
+router.get(
+  "/admin/all",
+  restrictTo("admin", "moderator"),
+  getAdminStories,
+);
+router.patch(
+  "/admin/bulk/status",
+  restrictTo("admin", "moderator"),
+  bulkUpdateStories,
+);
+router.delete(
+  "/admin/bulk",
+  restrictTo("admin", "moderator"),
+  bulkDeleteStories,
+);
 
 // Get story by ID
 router.get("/:id", getStoryById);

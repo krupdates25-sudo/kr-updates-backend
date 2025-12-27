@@ -36,10 +36,10 @@ const config = {
   // Database Configuration
   MONGODB_URI: process.env.MONGODB_URI_PRODUCTION,
 
-  // JWT Configuration
+  // JWT Configuration - 7 days expiry
   JWT_SECRET: process.env.JWT_SECRET,
-  JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || "7d",
-  JWT_COOKIE_EXPIRES_IN: parseInt(process.env.JWT_COOKIE_EXPIRES_IN, 10) || 7,
+  JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || "7d", // 7 days token expiry
+  JWT_COOKIE_EXPIRES_IN: parseInt(process.env.JWT_COOKIE_EXPIRES_IN, 10) || 7, // 7 days cookie expiry
 
   // Security Configuration
   BCRYPT_SALT_ROUNDS: parseInt(process.env.BCRYPT_SALT_ROUNDS, 10) || 12,
