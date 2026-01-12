@@ -1,15 +1,16 @@
 const mongoose = require("mongoose");
+const config = require("./index");
 
 const connectDB = async () => {
   try {
-    const conn = await mongoose.connect(process.env.MONGODB_URI_PRODUCTION, {
+    const conn = await mongoose.connect(config.MONGODB_URI, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
     console.log(`MongoDB Connected: ${conn.connection.host}`);
   } catch (error) {
     console.error(`Error: ${error.message}`);
-    process.exit(1);
+    // Avoid killing the dev server on transient connectivity issues.
   }
 };
 

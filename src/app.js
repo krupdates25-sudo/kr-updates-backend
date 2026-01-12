@@ -37,6 +37,7 @@ const searchRoutes = require("./routes/search");
 const breakingNewsRoutes = require("./routes/breakingNews");
 const notificationRoutes = require("./routes/notifications");
 const settingsRoutes = require("./routes/settings");
+const updatesRoutes = require("./routes/updates");
 
 // Initialize database
 Database.getInstance();
@@ -51,9 +52,10 @@ const io = new Server(server, {
     origin: [
       "http://localhost:5173",
       "http://localhost:5174",
+      "https://ae29ca4a076d.ngrok-free.app",
       "http://localhost:3000",
     ],
-    methods: ["GET", "POST"],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     credentials: true,
   },
 });
@@ -111,6 +113,7 @@ app.use("/api/v1/search", searchRoutes);
 app.use("/api/v1/breaking-news", breakingNewsRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/settings", settingsRoutes);
+app.use("/api/v1/updates", updatesRoutes);
 
 // Handle undefined routes
 app.all("*", (req, res, next) => {

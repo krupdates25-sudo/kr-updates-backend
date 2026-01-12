@@ -72,6 +72,22 @@ const updatePostValidation = [
   body("category")
     .optional()
     .isIn([
+      "Technology",
+      "Programming",
+      "Web Development",
+      "Mobile Development",
+      "Data Science",
+      "AI & Machine Learning",
+      "Cybersecurity",
+      "DevOps",
+      "Design",
+      "Business",
+      "Startup",
+      "Career",
+      "Tutorial",
+      "News",
+      "Review",
+      "Opinion",
       "general",
       "technology",
       "business",
@@ -104,6 +120,9 @@ router.get("/:slug", optionalAuth, postController.getPostBySlug);
 // Comments can be viewed without authentication
 router.get("/:id/comments", optionalAuth, postController.getComments);
 
+// Share tracking should work without login (optional authentication for attribution)
+router.post("/:id/share", optionalAuth, postController.sharePost);
+
 // Protected routes - authentication required
 router.use(protect);
 
@@ -111,9 +130,6 @@ router.use(protect);
 router.post("/:id/like", postController.toggleLike);
 router.get("/:id/like-status", postController.checkLikeStatus);
 router.get("/:id/likes", postController.getPostLikes);
-
-// Share tracking (all authenticated users)
-router.post("/:id/share", postController.sharePost);
 
 // Bookmark functionality (all authenticated users)
 router.post("/:id/bookmark", postController.toggleBookmark);
@@ -184,3 +200,6 @@ router.patch(
 );
 
 module.exports = router;
+
+// touch 1768044678157
+

@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const config = require("./index");
 
 class Database {
   constructor() {
@@ -12,7 +13,8 @@ class Database {
 
     mongoose.connection.on("error", (err) => {
       console.error("❌ MongoDB connection error:", err);
-      process.exit(1);
+      // Don't hard-exit on transient DNS/Atlas errors in dev.
+      // API endpoints can respond gracefully; nodemon / infra can handle restarts.
     });
 
     mongoose.connection.on("disconnected", () => {
@@ -35,7 +37,7 @@ class Database {
       family: 4, // Use IPv4, skip trying IPv6
     };
 
-    mongoose.connect(process.env.MONGODB_URI_PRODUCTION, options);
+    mongoose.connect(config.MONGODB_URI, options);
   }
 
   static getInstance() {

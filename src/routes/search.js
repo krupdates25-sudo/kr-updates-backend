@@ -8,12 +8,12 @@ const {
   getSuggestions,
   getTrendingSearches,
 } = require("../controllers/searchController");
-const { protect } = require("../middleware/auth");
+const { optionalAuth } = require("../middleware/auth");
 
 const router = express.Router();
 
-// All search routes require authentication
-router.use(protect);
+// Search should work without authentication (optional auth for personalization/admin)
+router.use(optionalAuth);
 
 // Global search
 router.get("/global", globalSearch);

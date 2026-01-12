@@ -9,6 +9,8 @@
     "create-admin": "node create-admin.js",
     "create-admin-prod": "node create-admin-production.js",
     "create-test-users": "node create-test-user.js",
+    "seed:posts": "node create-sample-posts.js",
+    "seed:breaking": "node create-sample-breaking-news.js",
     "test": "jest --watchAll --verbose",
     "test:coverage": "jest --coverage",
     "lint": "eslint .",

@@ -230,6 +230,8 @@ postSchema.virtual("likes", {
 postSchema.index({ title: "text", content: "text", excerpt: "text", subheading: "text" });
 postSchema.index({ author: 1, createdAt: -1 });
 postSchema.index({ status: 1, publishedAt: -1 });
+// Optimized index for the public feed query (status + visibility + active + published date ordering)
+postSchema.index({ status: 1, isActive: 1, isVisible: 1, publishedAt: -1 });
 postSchema.index({ category: 1, status: 1 });
 postSchema.index({ tags: 1 });
 postSchema.index({ slug: 1 }, { unique: true });

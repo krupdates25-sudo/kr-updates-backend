@@ -6,17 +6,26 @@ dotenv.config();
 const requiredEnvVars = [
   "NODE_ENV",
   "PORT",
-  "MONGODB_URI_PRODUCTION",
   "JWT_SECRET",
 ];
+
+// Require at least one DB URI (local dev or production)
+const hasDbUri = !!(
+  process.env.MONGODB_URI ||
+  process.env.DATABASE_URL ||
+  process.env.MONGODB_URI_PRODUCTION
+);
 
 // Validate required environment variables
 const missingEnvVars = requiredEnvVars.filter((envVar) => !process.env[envVar]);
 
-if (missingEnvVars.length > 0) {
+if (missingEnvVars.length > 0 || !hasDbUri) {
   console.error(
     "❌ Missing required environment variables:",
-    missingEnvVars.join(", "),
+    [
+      ...missingEnvVars,
+      ...(!hasDbUri ? ["MONGODB_URI (or MONGODB_URI_PRODUCTION)"] : []),
+    ].join(", "),
   );
   console.error(
     "📝 Please create a .env file in the root directory with the following variables:",
@@ -34,7 +43,11 @@ const config = {
   PORT: parseInt(process.env.PORT, 10) || 5000,
 
   // Database Configuration
-  MONGODB_URI: process.env.MONGODB_URI_PRODUCTION,
+  // Prefer local/dev URI when present; fall back to production URI.
+  MONGODB_URI:
+    process.env.MONGODB_URI ||
+    process.env.DATABASE_URL ||
+    process.env.MONGODB_URI_PRODUCTION,
 
   // JWT Configuration - 7 days expiry
   JWT_SECRET: process.env.JWT_SECRET,

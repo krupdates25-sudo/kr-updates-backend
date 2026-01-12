@@ -239,11 +239,14 @@ const getActiveStories = async (req, res) => {
       count: stories.length,
     });
   } catch (error) {
+    // When DB is temporarily unreachable, avoid crashing the UI with 500s.
+    // Return a safe empty response so the frontend can continue rendering.
     console.error("Error fetching active breaking news stories:", error);
-    res.status(500).json({
+    res.status(200).json({
       success: false,
-      message: "Error fetching active breaking news stories",
-      error: error.message,
+      data: [],
+      count: 0,
+      message: "Breaking news temporarily unavailable",
     });
   }
 };
@@ -269,6 +272,40 @@ const getStoryById = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching breaking news story:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching breaking news story",
+      error: error.message,
+    });
+  }
+};
+
+// Get a single ACTIVE (non-expired) story by ID for public display
+const getPublicStoryById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const story = await BreakingNews.findOne({
+      _id: id,
+      isActive: true,
+      expiresAt: { $gt: new Date() },
+    })
+      .populate("createdBy", "username firstName lastName profileImage")
+      .populate("updatedBy", "username firstName lastName profileImage");
+
+    if (!story) {
+      return res.status(404).json({
+        success: false,
+        message: "Breaking news story not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: story,
+    });
+  } catch (error) {
+    console.error("Error fetching public breaking news story:", error);
     res.status(500).json({
       success: false,
       message: "Error fetching breaking news story",
@@ -527,6 +564,7 @@ module.exports = {
   getAdminStories,
   getActiveStories,
   getStoryById,
+  getPublicStoryById,
   createStory,
   updateStory,
   deleteStory,

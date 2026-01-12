@@ -1,5 +1,44 @@
 const mongoose = require("mongoose");
 
+const SOCIAL_PLATFORMS = ["facebook", "twitter", "instagram", "linkedin", "youtube"];
+const SOCIAL_PLACEMENTS = ["dashboard_follow", "footer", "header"];
+
+const socialProfileSchema = new mongoose.Schema(
+  {
+    platform: {
+      type: String,
+      required: true,
+      enum: SOCIAL_PLATFORMS,
+    },
+    url: {
+      type: String,
+      trim: true,
+      validate: {
+        validator: function (v) {
+          return !v || /^https?:\/\/.+/.test(v);
+        },
+        message: "Please provide a valid social URL",
+      },
+    },
+    enabled: {
+      type: Boolean,
+      default: false,
+    },
+    placements: {
+      type: [String],
+      default: [],
+      validate: {
+        validator: function (arr) {
+          if (!Array.isArray(arr)) return false;
+          return arr.every((p) => SOCIAL_PLACEMENTS.includes(p));
+        },
+        message: "Invalid social placement",
+      },
+    },
+  },
+  { _id: false }
+);
+
 const siteSettingsSchema = new mongoose.Schema(
   {
     siteName: {
@@ -107,6 +146,11 @@ const siteSettingsSchema = new mongoose.Schema(
           message: "Please provide a valid YouTube URL",
         },
       },
+    },
+    // Rich social configuration used for visibility + placements on the frontend
+    socialProfiles: {
+      type: [socialProfileSchema],
+      default: [],
     },
     seo: {
       metaTitle: {

@@ -36,19 +36,25 @@ const generateOGHTML = (post, baseUrl) => {
     post.featuredImage?.url ||
     post.featuredVideo?.thumbnail ||
     post.featuredVideo?.url ||
-    `${baseUrl}/default-og-image.jpg`;
+    `${baseUrl}/favicon.png`;
   
   // Ensure image URL is absolute (Cloudinary URLs should already be absolute)
-  if (imageUrl && !imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
-    // If relative, make it absolute
-    imageUrl = `https://${imageUrl}`;
+  if (imageUrl && imageUrl.startsWith("data:")) {
+    imageUrl = `${baseUrl}/favicon.png`;
+  }
+  if (imageUrl && !imageUrl.startsWith("http://") && !imageUrl.startsWith("https://")) {
+    // If relative, make it absolute to this host
+    if (imageUrl.startsWith("/")) {
+      imageUrl = `${baseUrl}${imageUrl}`;
+    } else {
+      imageUrl = `${baseUrl}/${imageUrl}`;
+    }
   }
   
   const title = `${post.title} - KR Updates`;
   const description = post.excerpt || post.description || post.title;
-  // Use ngrok URL for sharing (hardcoded for WhatsApp preview testing)
-  const NGROK_URL = 'https://6bcbcd211145.ngrok-free.app';
-  const url = `${NGROK_URL}/post/${post.slug || post._id}`;
+  // Use current host for sharing URL (works behind proxies via passed baseUrl)
+  const url = `${baseUrl}/post/${post.slug || post._id}`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -144,7 +150,10 @@ const escapeHtml = (text) => {
 const getPostOG = catchAsync(async (req, res, next) => {
   const { slug } = req.params;
   const userAgent = req.headers["user-agent"] || "";
-  const baseUrl = `${req.protocol}://${req.get("host")}`;
+  // Build public base URL (works behind proxies like ngrok)
+  const protocol = req.headers["x-forwarded-proto"] || req.protocol || "https";
+  const host = req.headers["x-forwarded-host"] || req.get("host");
+  const baseUrl = `${protocol}://${host}`;
 
   // Find the post
   const post = await Post.findOne({
@@ -161,7 +170,9 @@ const getPostOG = catchAsync(async (req, res, next) => {
   // This endpoint is specifically for bots/crawlers
   const html = generateOGHTML(post, baseUrl);
   res.setHeader("Content-Type", "text/html");
-  res.setHeader("Cache-Control", "public, max-age=3600"); // Cache for 1 hour
+  // Avoid stale previews in social crawlers
+  res.setHeader("Cache-Control", "no-store, max-age=0");
+  res.setHeader("Pragma", "no-cache");
   return res.send(html);
 });
 

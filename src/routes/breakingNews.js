@@ -1,12 +1,13 @@
 const express = require("express");
 const router = express.Router();
 const { body } = require("express-validator");
-const { protect, restrictTo } = require("../middleware/auth");
+const { protect, restrictTo, optionalAuth } = require("../middleware/auth");
 const {
   getAllStories,
   getAdminStories,
   getActiveStories,
   getStoryById,
+  getPublicStoryById,
   createStory,
   updateStory,
   deleteStory,
@@ -78,52 +79,66 @@ const storyValidation = [
 ];
 
 // Public routes
+// NOTE: Frontend calls GET /breaking-news/ for viewing, so keep this public.
+router.get("/", optionalAuth, (req, res) => {
+  // If an admin/moderator is logged in, return full list for management UI.
+  if (req.user && ["admin", "moderator"].includes(req.user.role)) {
+    return getAllStories(req, res);
+  }
+  return getActiveStories(req, res);
+});
 router.get("/active", getActiveStories);
 
-// Protected routes
-router.use(protect);
-
-// Get all stories (with filters)
-router.get("/", getAllStories);
-
-// Admin routes for breaking news management
+// Admin routes for breaking news management (protected)
 router.get(
   "/admin/all",
+  protect,
   restrictTo("admin", "moderator"),
   getAdminStories,
 );
 router.patch(
   "/admin/bulk/status",
+  protect,
   restrictTo("admin", "moderator"),
   bulkUpdateStories,
 );
 router.delete(
   "/admin/bulk",
+  protect,
   restrictTo("admin", "moderator"),
   bulkDeleteStories,
 );
 
-// Get story by ID
-router.get("/:id", getStoryById);
+// Get all stories (with filters) - protected (includes inactive/expired unless filtered)
+router.get("/all", protect, getAllStories);
 
 // Create new story (admin and moderators only)
 router.post(
   "/",
+  protect,
   restrictTo("admin", "moderator"),
   storyValidation,
   createStory,
 );
 
 // Update story
-router.put("/:id", storyValidation, updateStory);
+router.put("/:id", protect, storyValidation, updateStory);
 
 // Delete story
-router.delete("/:id", deleteStory);
+router.delete("/:id", protect, deleteStory);
 
 // Toggle story status
-router.patch("/:id/toggle", toggleStoryStatus);
+router.patch("/:id/toggle", protect, toggleStoryStatus);
 
 // Extend story expiry
-router.patch("/:id/extend", extendStoryExpiry);
+router.patch("/:id/extend", protect, extendStoryExpiry);
+
+// Public/optional-auth story detail route must come last so it doesn't shadow /admin/*, /all, etc.
+router.get("/:id", optionalAuth, (req, res) => {
+  if (req.user && ["admin", "moderator"].includes(req.user.role)) {
+    return getStoryById(req, res);
+  }
+  return getPublicStoryById(req, res);
+});
 
 module.exports = router;

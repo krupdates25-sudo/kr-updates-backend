@@ -4,6 +4,8 @@ const { AppError } = require("../utils/appError");
 const ApiResponse = require("../utils/apiResponse");
 const Activity = require("../models/Activity");
 
+const SOCIAL_PLATFORMS = ["youtube", "facebook", "instagram", "twitter", "linkedin"];
+
 // Helper function to extract browser info
 const extractBrowserInfo = (userAgent) => {
   if (!userAgent) return { browser: "Unknown", os: "Unknown" };
@@ -26,9 +28,89 @@ const getNetworkInfo = (req) => {
   };
 };
 
+const normalizeSocialProfiles = (settings) => {
+  const current = Array.isArray(settings.socialProfiles) ? settings.socialProfiles : [];
+  const byPlatform = new Map(
+    current
+      .filter((p) => p && p.platform)
+      .map((p) => [String(p.platform).toLowerCase(), p])
+  );
+
+  // If profiles already exist, just ensure all platforms are present.
+  // If not, seed from socialLinks with sensible defaults.
+  const hadProfiles = current.length > 0;
+
+  const next = [];
+  for (const platform of SOCIAL_PLATFORMS) {
+    const existing = byPlatform.get(platform);
+    const linkUrl =
+      (settings.socialLinks && settings.socialLinks[platform]) || "";
+
+    if (existing) {
+      next.push({
+        platform,
+        url: existing.url ?? linkUrl ?? "",
+        enabled: typeof existing.enabled === "boolean" ? existing.enabled : !!(existing.url || linkUrl),
+        placements: Array.isArray(existing.placements) ? existing.placements : [],
+      });
+      continue;
+    }
+
+    const seededUrl = linkUrl || "";
+    next.push({
+      platform,
+      url: seededUrl,
+      enabled: !!seededUrl,
+      placements:
+        !hadProfiles && (platform === "youtube" || platform === "facebook") && seededUrl
+          ? ["dashboard_follow"]
+          : [],
+    });
+  }
+
+  // Detect changes (very lightweight compare)
+  const normalize = (arr) =>
+    JSON.stringify(
+      (arr || []).map((p) => ({
+        platform: p.platform,
+        url: p.url || "",
+        enabled: !!p.enabled,
+        placements: Array.isArray(p.placements) ? p.placements.slice().sort() : [],
+      }))
+    );
+
+  const changed = normalize(current) !== normalize(next);
+  if (changed) {
+    settings.socialProfiles = next;
+  }
+  return changed;
+};
+
+const syncSocialLinksFromProfiles = (settings) => {
+  if (!Array.isArray(settings.socialProfiles)) return;
+  if (!settings.socialLinks) settings.socialLinks = {};
+
+  for (const p of settings.socialProfiles) {
+    if (!p || !p.platform) continue;
+    const platform = String(p.platform).toLowerCase();
+    if (!SOCIAL_PLATFORMS.includes(platform)) continue;
+    if (p.url !== undefined) {
+      settings.socialLinks[platform] = p.url || "";
+    }
+  }
+};
+
 // Get site settings
 const getSettings = catchAsync(async (req, res, next) => {
   const settings = await SiteSettings.getSettings();
+
+  // Backfill rich social profiles from legacy socialLinks (and ensure all platforms exist)
+  const changed = normalizeSocialProfiles(settings);
+  if (changed) {
+    syncSocialLinksFromProfiles(settings);
+    await settings.save();
+  }
+
   ApiResponse.success(res, settings, "Site settings retrieved successfully");
 });
 
@@ -43,6 +125,7 @@ const updateSettings = catchAsync(async (req, res, next) => {
     contactPhone,
     address,
     socialLinks,
+    socialProfiles,
     seo,
     maintenanceMode,
     maintenanceMessage,
@@ -75,6 +158,32 @@ const updateSettings = catchAsync(async (req, res, next) => {
     if (socialLinks.youtube !== undefined)
       settings.socialLinks.youtube = socialLinks.youtube;
   }
+
+  // Rich social profiles (enabled + placements)
+  if (socialProfiles !== undefined) {
+    if (!Array.isArray(socialProfiles)) {
+      return next(new AppError("socialProfiles must be an array", 400));
+    }
+
+    settings.socialProfiles = socialProfiles
+      .filter((p) => p && p.platform)
+      .map((p) => ({
+        platform: String(p.platform).toLowerCase(),
+        url: p.url || "",
+        enabled: !!p.enabled,
+        placements: Array.isArray(p.placements) ? p.placements : [],
+      }));
+
+    // Keep legacy socialLinks in sync
+    syncSocialLinksFromProfiles(settings);
+  } else if (socialLinks !== undefined) {
+    // Ensure socialProfiles exists and reflect URL updates without overriding enabled/placements
+    const changed = normalizeSocialProfiles(settings);
+    if (changed) {
+      syncSocialLinksFromProfiles(settings);
+    }
+  }
+
   if (seo !== undefined) {
     if (seo.metaTitle !== undefined) settings.seo.metaTitle = seo.metaTitle;
     if (seo.metaDescription !== undefined)

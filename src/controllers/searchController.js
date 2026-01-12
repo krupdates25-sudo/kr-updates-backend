@@ -38,7 +38,8 @@ const globalSearch = catchAsync(async (req, res, next) => {
       ],
       status: "published",
       isActive: true,
-      isVisible: true,
+      // Backward compatible: include old posts missing isVisible
+      isVisible: { $ne: false },
     })
       .populate("author", "username firstName lastName profileImage")
       .select(
@@ -48,12 +49,17 @@ const globalSearch = catchAsync(async (req, res, next) => {
       .sort({ publishedAt: -1 });
 
     // Search users
+    const canSearchEmail =
+      req.user && ["admin", "moderator"].includes(req.user.role);
+
     const users = await User.find({
       $or: [
         { username: { $regex: searchQuery, $options: "i" } },
         { firstName: { $regex: searchQuery, $options: "i" } },
         { lastName: { $regex: searchQuery, $options: "i" } },
-        { email: { $regex: searchQuery, $options: "i" } },
+        ...(canSearchEmail
+          ? [{ email: { $regex: searchQuery, $options: "i" } }]
+          : []),
       ],
       isActive: true,
     })
@@ -81,7 +87,8 @@ const globalSearch = catchAsync(async (req, res, next) => {
       category: { $regex: searchQuery, $options: "i" },
       status: "published",
       isActive: true,
-      isVisible: true,
+      // Backward compatible: include old posts missing isVisible
+      isVisible: { $ne: false },
     });
 
     const results = {
@@ -160,7 +167,10 @@ const searchPosts = catchAsync(async (req, res, next) => {
     ],
     status: "published",
     isActive: true,
-    isVisible: true,
+    // Backward compatible: include old posts missing isVisible
+    isVisible: { $ne: false },
+    // Backward compatible: include old posts missing isVisible
+    isVisible: { $ne: false },
   })
     .populate("author", "username firstName lastName profileImage")
     .select(
@@ -187,12 +197,15 @@ const searchUsers = catchAsync(async (req, res, next) => {
   const searchQuery = query.trim();
   const limitNum = parseInt(limit);
 
+  const canSearchEmail =
+    req.user && ["admin", "moderator"].includes(req.user.role);
+
   const users = await User.find({
     $or: [
       { username: { $regex: searchQuery, $options: "i" } },
       { firstName: { $regex: searchQuery, $options: "i" } },
       { lastName: { $regex: searchQuery, $options: "i" } },
-      { email: { $regex: searchQuery, $options: "i" } },
+      ...(canSearchEmail ? [{ email: { $regex: searchQuery, $options: "i" } }] : []),
     ],
     isActive: true,
   })
@@ -254,7 +267,8 @@ const searchCategories = catchAsync(async (req, res, next) => {
     category: { $regex: searchQuery, $options: "i" },
     status: "published",
     isActive: true,
-    isVisible: true,
+    // Backward compatible: include old posts missing isVisible
+    isVisible: { $ne: false },
   });
 
   const categoryResults = categories.slice(0, limitNum).map((category) => ({
@@ -286,7 +300,8 @@ const getSuggestions = catchAsync(async (req, res, next) => {
       title: { $regex: searchQuery, $options: "i" },
       status: "published",
       isActive: true,
-      isVisible: true,
+      // Backward compatible: include old posts missing isVisible
+      isVisible: { $ne: false },
     })
       .select("title")
       .limit(Math.ceil(limitNum / 2))
@@ -297,7 +312,8 @@ const getSuggestions = catchAsync(async (req, res, next) => {
       category: { $regex: searchQuery, $options: "i" },
       status: "published",
       isActive: true,
-      isVisible: true,
+      // Backward compatible: include old posts missing isVisible
+      isVisible: { $ne: false },
     });
 
     // Get suggestions from tags
@@ -305,7 +321,8 @@ const getSuggestions = catchAsync(async (req, res, next) => {
       tags: { $in: [new RegExp(searchQuery, "i")] },
       status: "published",
       isActive: true,
-      isVisible: true,
+      // Backward compatible: include old posts missing isVisible
+      isVisible: { $ne: false },
     });
 
     const suggestions = [
@@ -347,7 +364,7 @@ const getTrendingSearches = catchAsync(async (req, res, next) => {
   try {
     // Get trending categories
     const trendingCategories = await Post.aggregate([
-      { $match: { status: "published", isActive: true, isVisible: true } },
+      { $match: { status: "published", isActive: true, isVisible: { $ne: false } } },
       { $group: { _id: "$category", count: { $sum: 1 } } },
       { $sort: { count: -1 } },
       { $limit: limitNum },

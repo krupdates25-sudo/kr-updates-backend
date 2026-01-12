@@ -116,28 +116,30 @@ const getAllPosts = catchAsync(async (req, res, next) => {
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
   const limitNum = parseInt(limit);
+  const now = new Date();
 
-  // Get posts with pagination and populate author with privacy settings
-  const posts = await Post.find({
+  const baseFilter = {
     status: "published",
-    publishedAt: { $lte: new Date() },
+    publishedAt: { $lte: now },
     isActive: true,
-    isVisible: true, // Only show visible posts to public
-  })
-    .populate(
-      "author",
-      "username firstName lastName profileImage email privacy notifications theme",
-    )
-    .sort({ publishedAt: -1 })
-    .skip(skip)
-    .limit(limitNum);
+    // Treat missing isVisible as visible (backward compatible with old posts)
+    isVisible: { $ne: false },
+  };
 
-  // Get total count for pagination info
-  const totalCount = await Post.countDocuments({
-    status: "published",
-    isActive: true,
-    isVisible: true, // Only count visible posts
-  });
+  // Optimize: select only fields needed for feed cards and keep author lean.
+  // Also run list + count in parallel to reduce overall latency.
+  const [posts, totalCount] = await Promise.all([
+    Post.find(baseFilter)
+      .select(
+        "title excerpt featuredImage featuredVideo tags category publishedAt likeCount commentCount shareCount slug readingTime isTrending isFeatured isPromoted",
+      )
+      .populate("author", "username firstName lastName profileImage role title")
+      .sort({ publishedAt: -1 })
+      .skip(skip)
+      .limit(limitNum)
+      .lean(),
+    Post.countDocuments(baseFilter),
+  ]);
 
   // Add like status if user is authenticated
   const postsWithLikeStatus = await addLikeStatusToPosts(posts, req.user?._id);
@@ -267,17 +269,14 @@ const getTrendingPosts = catchAsync(async (req, res, next) => {
         {
           $project: {
             title: 1,
-            content: 1,
             excerpt: 1,
             featuredImage: 1,
+            slug: 1,
             tags: 1,
             category: 1,
             status: 1,
-            likes: 1,
-            comments: 1,
-            shares: 1,
-            views: 1,
             createdAt: 1,
+            publishedAt: 1,
             updatedAt: 1,
             trendingScore: 1,
             "author._id": 1,
@@ -285,10 +284,6 @@ const getTrendingPosts = catchAsync(async (req, res, next) => {
             "author.lastName": 1,
             "author.username": 1,
             "author.profileImage": 1,
-            "author.email": 1,
-            "author.privacy": 1,
-            "author.notifications": 1,
-            "author.theme": 1,
           },
         },
       ]);
@@ -313,12 +308,13 @@ const getTrendingPosts = catchAsync(async (req, res, next) => {
       }
 
       posts = await Post.find(matchFilter)
-        .populate(
-          "author",
-          "username firstName lastName profileImage email privacy notifications theme",
+        .select(
+          "title excerpt featuredImage tags category status publishedAt createdAt updatedAt likeCount commentCount shareCount viewCount slug",
         )
+        .populate("author", "username firstName lastName profileImage role title")
         .sort(sortOption)
-        .limit(parseInt(limit));
+        .limit(parseInt(limit))
+        .lean();
     }
 
     ApiResponse.success(
@@ -347,12 +343,13 @@ const getFeaturedPosts = catchAsync(async (req, res, next) => {
     isFeatured: true,
     isActive: true,
   })
+    .select(
+      "title excerpt featuredImage tags category status publishedAt createdAt updatedAt likeCount commentCount shareCount viewCount slug",
+    )
     .sort({ publishedAt: -1 })
     .limit(5)
-    .populate(
-      "author",
-      "username firstName lastName profileImage email privacy notifications theme",
-    );
+    .populate("author", "username firstName lastName profileImage role title")
+    .lean();
 
   ApiResponse.success(res, posts, "Featured posts retrieved successfully");
 });
@@ -657,7 +654,21 @@ const updatePost = catchAsync(async (req, res, next) => {
   }
 
   const { id } = req.params;
-  const { title, content, excerpt, description, subheading, reporterName, category, tags, featuredImage, status, authorDisplayName } = req.body;
+  const {
+    title,
+    content,
+    excerpt,
+    description,
+    subheading,
+    reporterName,
+    category,
+    tags,
+    featuredImage,
+    status,
+    authorDisplayName,
+    isTrending,
+    isFeatured,
+  } = req.body;
 
   // Find the post
   const post = await Post.findById(id);
@@ -703,6 +714,29 @@ const updatePost = catchAsync(async (req, res, next) => {
             caption: featuredImage.caption || "",
           }
         : undefined;
+  }
+
+  // Feed flags (Trending / Featured)
+  // We allow these only for Admin via the editor payload.
+  // (There are also dedicated toggle endpoints for staff.)
+  if (isTrending !== undefined) {
+    if (req.user.role !== "admin") {
+      return next(new AppError("Only Admin can set trending flag", 403));
+    }
+    if (typeof isTrending !== "boolean") {
+      return next(new AppError("isTrending must be a boolean", 400));
+    }
+    updateData.isTrending = isTrending;
+  }
+
+  if (isFeatured !== undefined) {
+    if (req.user.role !== "admin") {
+      return next(new AppError("Only Admin can set featured flag", 403));
+    }
+    if (typeof isFeatured !== "boolean") {
+      return next(new AppError("isFeatured must be a boolean", 400));
+    }
+    updateData.isFeatured = isFeatured;
   }
 
   // Allow admin to set custom author display name
@@ -1543,7 +1577,11 @@ const deleteComment = catchAsync(async (req, res, next) => {
 // Track post share
 const sharePost = catchAsync(async (req, res, next) => {
   const { id: postId } = req.params;
-  const { platform = "unknown" } = req.body; // Track which platform was used
+  // Track which platform was used (accepts object or string body)
+  const platform =
+    typeof req.body === "string"
+      ? req.body
+      : req.body?.platform || "unknown";
 
   // Check if post exists
   const post = await Post.findById(postId);
@@ -1551,25 +1589,31 @@ const sharePost = catchAsync(async (req, res, next) => {
     return next(new AppError("Post not found", 404));
   }
 
-  // Increment share count
-  await Post.findByIdAndUpdate(postId, { $inc: { shareCount: 1 } });
-
-  const newShareCount = (post.shareCount || 0) + 1;
-
-  // Log share activity
-  await logActivity(
-    {
-      user: req.user._id,
-      type: "post_share",
-      description: "User shared a post",
-      details: `Shared post "${post.title}" on ${platform}`,
-      metadata: {
-        postId: postId,
-        platform: platform,
-      },
-    },
-    req,
+  // Increment share count (atomic) and get updated value back
+  const updatedPost = await Post.findByIdAndUpdate(
+    postId,
+    { $inc: { shareCount: 1 } },
+    { new: true },
   );
+
+  const newShareCount = updatedPost?.shareCount ?? (post.shareCount || 0) + 1;
+
+  // Log share activity only when authenticated (Activity.user is required)
+  if (req.user?._id) {
+    await logActivity(
+      {
+        user: req.user._id,
+        type: "post_share",
+        description: "User shared a post",
+        details: `Shared post "${post.title}" on ${platform}`,
+        metadata: {
+          postId: postId,
+          platform: platform,
+        },
+      },
+      req,
+    );
+  }
 
   // Emit real-time update for share
   if (global.io) {
