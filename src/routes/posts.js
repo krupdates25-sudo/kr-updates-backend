@@ -22,6 +22,7 @@ const createPostValidation = [
     .withMessage("Content must be at least 50 characters long"),
   body("category")
     .isIn([
+      "Education",
       "Technology",
       "Programming",
       "Web Development",
@@ -72,6 +73,7 @@ const updatePostValidation = [
   body("category")
     .optional()
     .isIn([
+      "Education",
       "Technology",
       "Programming",
       "Web Development",
