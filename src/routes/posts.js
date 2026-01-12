@@ -102,6 +102,12 @@ const updatePostValidation = [
       "other",
     ])
     .withMessage("Please select a valid category"),
+  body("tags").optional().isArray().withMessage("Tags must be an array"),
+  body("tags.*")
+    .optional()
+    .trim()
+    .isLength({ max: 30 })
+    .withMessage("Each tag cannot exceed 30 characters"),
 ];
 
 // Public routes (with optional authentication for personalization)
