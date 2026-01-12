@@ -212,6 +212,11 @@ const corsOptions = {
       "http://localhost:5173", // Vite default port
       "http://127.0.0.1:5173", // Vite alternative
       "https://yourdomain.com",
+      // Vercel frontend domains
+      "https://kr-updates-frontend.vercel.app",
+      "https://*.vercel.app",
+      // Allow all Vercel preview deployments
+      /^https:\/\/.*\.vercel\.app$/,
     ];
 
     if (config.NODE_ENV === "development") {
@@ -230,7 +235,18 @@ const corsOptions = {
       origin.includes('ngrok.app')
     );
 
-    if (allowedOrigins.includes(origin) || isNgrok) {
+    // Check if origin matches Vercel pattern
+    const isVercel = origin && /^https:\/\/.*\.vercel\.app$/.test(origin);
+
+    // Check if origin is in allowedOrigins array or matches patterns
+    const isAllowed = allowedOrigins.includes(origin) || 
+                      isNgrok || 
+                      isVercel ||
+                      (Array.isArray(allowedOrigins) && allowedOrigins.some(pattern => 
+                        pattern instanceof RegExp && pattern.test(origin)
+                      ));
+
+    if (isAllowed) {
       callback(null, true);
     } else {
       console.warn(`CORS blocked origin: ${origin}`);

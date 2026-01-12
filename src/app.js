@@ -49,12 +49,33 @@ const server = http.createServer(app);
 // Create Socket.IO instance
 const io = new Server(server, {
   cors: {
-    origin: [
-      "http://localhost:5173",
-      "http://localhost:5174",
-      "https://ae29ca4a076d.ngrok-free.app",
-      "http://localhost:3000",
-    ],
+    origin: function (origin, callback) {
+      // Allow requests with no origin (mobile apps, curl, etc.)
+      if (!origin) return callback(null, true);
+
+      const allowedOrigins = [
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "https://ae29ca4a076d.ngrok-free.app",
+        "http://localhost:3000",
+        // Vercel frontend domains
+        "https://kr-updates-frontend.vercel.app",
+      ];
+
+      // Allow all Vercel preview deployments
+      const isVercel = /^https:\/\/.*\.vercel\.app$/.test(origin);
+      const isNgrok = origin && (
+        origin.includes('ngrok-free.app') ||
+        origin.includes('ngrok.io') ||
+        origin.includes('ngrok.app')
+      );
+
+      if (allowedOrigins.includes(origin) || isVercel || isNgrok) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     credentials: true,
   },
