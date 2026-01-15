@@ -15,6 +15,13 @@ router.get(
   updatesController.getAllSubscribers
 );
 
+router.patch(
+  "/subscribers/:id",
+  protect,
+  restrictTo("admin"),
+  updatesController.updateSubscriber
+);
+
 router.delete(
   "/subscribers/:id",
   protect,

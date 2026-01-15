@@ -146,6 +146,33 @@ exports.getAllSubscribers = catchAsync(async (req, res, next) => {
   );
 });
 
+// Admin endpoint: Update subscriber
+exports.updateSubscriber = catchAsync(async (req, res, next) => {
+  const { id } = req.params;
+  const { name, phone, email } = req.body;
+
+  // Normalize phone if provided
+  const normalizedPhone = phone ? normalizePhone(phone) : undefined;
+
+  // Build update object
+  const updateData = {};
+  if (name !== undefined) updateData.name = name.trim() || undefined;
+  if (normalizedPhone !== undefined) updateData.phone = normalizedPhone || undefined;
+  if (email !== undefined) updateData.email = email.trim().toLowerCase() || undefined;
+
+  const subscriber = await UpdateSubscriber.findByIdAndUpdate(
+    id,
+    { $set: updateData },
+    { new: true, runValidators: true }
+  );
+
+  if (!subscriber) {
+    return next(new AppError("Subscriber not found", 404));
+  }
+
+  return ApiResponse.success(res, subscriber, "Subscriber updated successfully");
+});
+
 // Admin endpoint: Delete subscriber
 exports.deleteSubscriber = catchAsync(async (req, res, next) => {
   const { id } = req.params;
