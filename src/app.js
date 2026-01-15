@@ -60,6 +60,9 @@ const io = new Server(server, {
         "http://localhost:3000",
         // Vercel frontend domains
         "https://kr-updates-frontend.vercel.app",
+        // Production domains
+        "https://krupdates.in",
+        "https://www.krupdates.in",
       ];
 
       // Allow all Vercel preview deployments

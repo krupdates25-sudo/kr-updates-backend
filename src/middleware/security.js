@@ -215,6 +215,9 @@ const corsOptions = {
       // Vercel frontend domains
       "https://kr-updates-frontend.vercel.app",
       "https://*.vercel.app",
+      // Production domains
+      "https://krupdates.in",
+      "https://www.krupdates.in",
       // Allow all Vercel preview deployments
       /^https:\/\/.*\.vercel\.app$/,
     ];
