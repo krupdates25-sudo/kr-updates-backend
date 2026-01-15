@@ -104,6 +104,64 @@ exports.subscribe = catchAsync(async (req, res, next) => {
   );
 });
 
+// Admin endpoint: Get all subscribers
+exports.getAllSubscribers = catchAsync(async (req, res, next) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 50;
+  const skip = (page - 1) * limit;
+  const search = req.query.search || "";
+
+  // Build search query
+  const searchQuery = {};
+  if (search) {
+    searchQuery.$or = [
+      { name: { $regex: search, $options: "i" } },
+      { email: { $regex: search, $options: "i" } },
+      { phone: { $regex: search, $options: "i" } },
+    ];
+  }
+
+  // Get subscribers with pagination
+  const subscribers = await UpdateSubscriber.find(searchQuery)
+    .sort({ lastSubmittedAt: -1 })
+    .skip(skip)
+    .limit(limit)
+    .lean();
+
+  // Get total count
+  const total = await UpdateSubscriber.countDocuments(searchQuery);
+
+  return ApiResponse.success(
+    res,
+    {
+      data: subscribers,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
+    },
+    "Subscribers retrieved successfully"
+  );
+});
+
+// Admin endpoint: Delete subscriber
+exports.deleteSubscriber = catchAsync(async (req, res, next) => {
+  const { id } = req.params;
+
+  const subscriber = await UpdateSubscriber.findByIdAndDelete(id);
+
+  if (!subscriber) {
+    return next(new AppError("Subscriber not found", 404));
+  }
+
+  return ApiResponse.success(res, null, "Subscriber deleted successfully");
+});
+
+
+
+
 
 
 
