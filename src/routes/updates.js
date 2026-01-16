@@ -13,9 +13,14 @@ const router = express.Router();
 // Public route - for subscription form
 router.post("/subscribe", createSubscriber);
 
-// Health check for updates routes
+// Health check for updates routes (public)
 router.get("/health", (req, res) => {
-  res.json({ status: "ok", service: "updates" });
+  res.json({ 
+    status: "ok", 
+    service: "updates",
+    timestamp: new Date().toISOString(),
+    routes: ["/subscribe", "/subscribers", "/health"]
+  });
 });
 
 // Admin only routes
