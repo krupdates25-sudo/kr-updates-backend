@@ -212,6 +212,8 @@ const corsOptions = {
       "http://localhost:5173", // Vite default port
       "http://127.0.0.1:5173", // Vite alternative
       "https://yourdomain.com",
+      "https://krupdates.in", // Production domain
+      "https://www.krupdates.in", // Production domain with www
     ];
 
     if (config.NODE_ENV === "development") {
