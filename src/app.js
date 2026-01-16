@@ -37,7 +37,7 @@ const searchRoutes = require("./routes/search");
 const breakingNewsRoutes = require("./routes/breakingNews");
 const notificationRoutes = require("./routes/notifications");
 const settingsRoutes = require("./routes/settings");
-const feedbackRoutes = require("./routes/feedbacks");
+const updatesRoutes = require("./routes/updates");
 
 // Initialize database
 Database.getInstance();
@@ -68,13 +68,7 @@ app.set("trust proxy", 1);
 
 // Security middleware
 app.use(helmetConfig);
-
-// CORS - Must be before other middleware
 app.use(cors(corsOptions));
-
-// Handle preflight requests explicitly
-app.options("*", cors(corsOptions));
-
 // app.use(generalLimiter); // Removed rate limiting
 app.use(mongoSanitizeConfig);
 app.use(xssProtection);
@@ -119,7 +113,7 @@ app.use("/api/v1/search", searchRoutes);
 app.use("/api/v1/breaking-news", breakingNewsRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/settings", settingsRoutes);
-app.use("/api/v1/feedbacks", feedbackRoutes);
+app.use("/api/v1/updates", updatesRoutes);
 
 // Handle undefined routes
 app.all("*", (req, res, next) => {
