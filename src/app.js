@@ -68,7 +68,13 @@ app.set("trust proxy", 1);
 
 // Security middleware
 app.use(helmetConfig);
+
+// CORS - Must be before other middleware
 app.use(cors(corsOptions));
+
+// Handle preflight requests explicitly
+app.options("*", cors(corsOptions));
+
 // app.use(generalLimiter); // Removed rate limiting
 app.use(mongoSanitizeConfig);
 app.use(xssProtection);
