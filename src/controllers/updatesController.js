@@ -1,7 +1,7 @@
 const UpdateSubscriber = require("../models/UpdateSubscriber");
 const catchAsync = require("../utils/catchAsync");
 const { AppError } = require("../utils/appError");
-const APIResponse = require("../utils/apiResponse");
+const ApiResponse = require("../utils/apiResponse");
 
 // Get all subscribers (admin only)
 const getSubscribers = catchAsync(async (req, res, next) => {
@@ -32,7 +32,7 @@ const getSubscribers = catchAsync(async (req, res, next) => {
 
   const totalPages = Math.ceil(totalCount / parseInt(limit));
 
-  APIResponse.paginated(
+  ApiResponse.paginated(
     res,
     subscribers,
     {
@@ -54,7 +54,7 @@ const getSubscriber = catchAsync(async (req, res, next) => {
     return next(new AppError("Subscriber not found", 404));
   }
 
-  APIResponse.success(res, subscriber, "Subscriber retrieved successfully");
+  ApiResponse.success(res, subscriber, "Subscriber retrieved successfully");
 });
 
 // Create subscriber (public - for subscription form)
@@ -110,7 +110,7 @@ const createSubscriber = catchAsync(async (req, res, next) => {
     metadata,
   });
 
-  APIResponse.created(res, subscriber, "Subscriber created successfully");
+  ApiResponse.created(res, subscriber, "Subscriber created successfully");
 });
 
 // Update subscriber (admin only)
@@ -129,7 +129,7 @@ const updateSubscriber = catchAsync(async (req, res, next) => {
 
   await subscriber.save();
 
-  APIResponse.updated(res, subscriber, "Subscriber updated successfully");
+  ApiResponse.updated(res, subscriber, "Subscriber updated successfully");
 });
 
 // Delete subscriber (admin only)
@@ -140,7 +140,7 @@ const deleteSubscriber = catchAsync(async (req, res, next) => {
     return next(new AppError("Subscriber not found", 404));
   }
 
-  APIResponse.deleted(res, "Subscriber deleted successfully");
+  ApiResponse.deleted(res, "Subscriber deleted successfully");
 });
 
 module.exports = {
