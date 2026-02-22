@@ -110,6 +110,13 @@ const postSchema = new mongoose.Schema(
       trim: true,
       maxlength: [50, "Category cannot exceed 50 characters"],
     },
+    location: {
+      type: String,
+      trim: true,
+      maxlength: [100, "Location cannot exceed 100 characters"],
+      default: "Kishangarh Renwal",
+      index: true,
+    },
     status: {
       type: String,
       enum: {
