@@ -192,6 +192,12 @@ const postSchema = new mongoose.Schema(
       comment:
         "Admin can toggle post visibility - false means hidden from public",
     },
+    location: {
+      type: String,
+      trim: true,
+      maxlength: [100, "Location cannot exceed 100 characters"],
+      default: "Kishangarh Renwal",
+    },
   },
   {
     timestamps: true,
@@ -238,6 +244,7 @@ postSchema.index({ slug: 1 }, { unique: true });
 postSchema.index({ isPromoted: 1, isTrending: 1, isFeatured: 1 });
 postSchema.index({ viewCount: -1 });
 postSchema.index({ likeCount: -1 });
+postSchema.index({ location: 1 });
 
 // Pre-save middleware to generate slug
 postSchema.pre("save", function (next) {
@@ -261,12 +268,12 @@ postSchema.pre("save", function (next) {
       this.slug = `${slug}-${Date.now()}`;
     }
   }
-  
+
   // Ensure slug always exists (fallback for edge cases)
   if (!this.slug) {
     this.slug = this._id ? this._id.toString() : `post-${Date.now()}`;
   }
-  
+
   next();
 });
 

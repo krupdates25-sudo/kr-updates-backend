@@ -206,17 +206,12 @@ const corsOptions = {
     // Allow requests with no origin (mobile apps, curl, etc.)
     if (!origin) return callback(null, true);
 
-    // Normalize origin (remove trailing slash)
-    const normalizedOrigin = origin.replace(/\/$/, '');
-
     const allowedOrigins = [
       "http://localhost:3000",
       "http://localhost:3001",
       "http://localhost:5173", // Vite default port
       "http://127.0.0.1:5173", // Vite alternative
       "https://yourdomain.com",
-      "https://krupdates.in", // Production domain
-      "https://www.krupdates.in", // Production domain with www
     ];
 
     if (config.NODE_ENV === "development") {
@@ -229,26 +224,17 @@ const corsOptions = {
     }
 
     // Allow ngrok URLs (for testing WhatsApp/Facebook previews)
-    const isNgrok = normalizedOrigin && (
-      normalizedOrigin.includes('ngrok-free.app') ||
-      normalizedOrigin.includes('ngrok.io') ||
-      normalizedOrigin.includes('ngrok.app')
+    const isNgrok = origin && (
+      origin.includes('ngrok-free.app') ||
+      origin.includes('ngrok.io') ||
+      origin.includes('ngrok.app')
     );
 
-    // Check both original and normalized origin
-    if (allowedOrigins.includes(normalizedOrigin) || 
-        allowedOrigins.includes(origin) || 
-        isNgrok) {
+    if (allowedOrigins.includes(origin) || isNgrok) {
       callback(null, true);
     } else {
-      console.warn(`CORS blocked origin: ${origin} (normalized: ${normalizedOrigin})`);
-      // In production, be more permissive for debugging
-      if (config.NODE_ENV === "production") {
-        console.warn(`Allowing origin in production mode: ${origin}`);
-        callback(null, true);
-      } else {
-        callback(new Error(`Not allowed by CORS. Origin: ${origin}`));
-      }
+      console.warn(`CORS blocked origin: ${origin}`);
+      callback(new Error(`Not allowed by CORS. Origin: ${origin}`));
     }
   },
   credentials: true,
@@ -262,13 +248,7 @@ const corsOptions = {
     "Origin",
     "Access-Control-Request-Method",
     "Access-Control-Request-Headers",
-    "X-Requested-With",
   ],
-  exposedHeaders: [
-    "Content-Length",
-    "Content-Type",
-  ],
-  maxAge: 86400, // 24 hours
 };
 
 module.exports = {

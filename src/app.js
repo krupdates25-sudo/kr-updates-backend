@@ -38,6 +38,7 @@ const breakingNewsRoutes = require("./routes/breakingNews");
 const notificationRoutes = require("./routes/notifications");
 const settingsRoutes = require("./routes/settings");
 const updatesRoutes = require("./routes/updates");
+const translateRoutes = require("./routes/translateRoutes");
 
 // Initialize database
 Database.getInstance();
@@ -114,6 +115,7 @@ app.use("/api/v1/breaking-news", breakingNewsRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/settings", settingsRoutes);
 app.use("/api/v1/updates", updatesRoutes);
+app.use("/api/v1/translate", translateRoutes);
 
 // Handle undefined routes
 app.all("*", (req, res, next) => {
@@ -145,6 +147,22 @@ process.on("uncaughtException", (err) => {
 
 // Handle unhandled promise rejections
 process.on("unhandledRejection", (err) => {
+  const msg = err?.message || '';
+  // Don't crash the server on transient MongoDB / DNS errors —
+  // these are already logged and handled in src/config/database.js
+  const isDbError =
+    msg.includes('querySrv') ||
+    msg.includes('ECONNREFUSED') ||
+    msg.includes('MongoNetworkError') ||
+    msg.includes('MongoServerSelectionError') ||
+    msg.includes('ENOTFOUND') ||
+    msg.includes('buffering timed out');
+
+  if (isDbError) {
+    console.warn('⚠️ Suppressed DB unhandledRejection (server keeps running):', msg);
+    return;
+  }
+
   console.log("UNHANDLED REJECTION! 💥 Shutting down...");
   console.log(err.name, err.message);
   process.exit(1);

@@ -112,7 +112,7 @@ const addLikeStatusToPosts = async (posts, userId) => {
 
 // Get all posts (public)
 const getAllPosts = catchAsync(async (req, res, next) => {
-  const { page = 1, limit = 8 } = req.query;
+  const { page = 1, limit = 8, location } = req.query;
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
   const limitNum = parseInt(limit);
@@ -126,12 +126,17 @@ const getAllPosts = catchAsync(async (req, res, next) => {
     isVisible: { $ne: false },
   };
 
+  // Add location filter if provided
+  if (location && location !== 'All' && location !== 'all') {
+    baseFilter.location = location;
+  }
+
   // Optimize: select only fields needed for feed cards and keep author lean.
   // Also run list + count in parallel to reduce overall latency.
   const [posts, totalCount] = await Promise.all([
     Post.find(baseFilter)
       .select(
-        "title excerpt featuredImage featuredVideo tags category publishedAt likeCount commentCount shareCount slug readingTime isTrending isFeatured isPromoted",
+        "title excerpt featuredImage featuredVideo tags category location publishedAt likeCount commentCount shareCount slug readingTime isTrending isFeatured isPromoted",
       )
       .populate("author", "username firstName lastName profileImage role title")
       .sort({ publishedAt: -1 })
@@ -431,15 +436,15 @@ const searchPosts = catchAsync(async (req, res, next) => {
 // Get post by slug
 const getPostBySlug = catchAsync(async (req, res, next) => {
   const { slug } = req.params;
-  
+
   // Check if slug is actually a MongoDB ObjectId (24 hex characters)
   const isObjectId = /^[0-9a-fA-F]{24}$/.test(slug);
-  
+
   // Build query - handle both slug and ID lookups
   const query = {
     isActive: true,
   };
-  
+
   if (isObjectId) {
     // If it's an ObjectId, search by _id
     query._id = slug;
@@ -490,6 +495,7 @@ const createPost = catchAsync(async (req, res, next) => {
     reporterName,
     category,
     tags,
+    location,
     featuredImage,
     featuredVideo,
   } = req.body;
@@ -500,6 +506,7 @@ const createPost = catchAsync(async (req, res, next) => {
     content: content.trim(),
     author: req.user._id,
     category,
+    location: location || "Kishangarh Renwal",
     status: "draft", // Always start as draft
   };
 
@@ -548,7 +555,7 @@ const createPost = catchAsync(async (req, res, next) => {
   // IMPORTANT: Force status based on user role - non-admins CANNOT publish
   // Even if they send status: "published", we override it to "draft"
   const requestedStatus = req.body.status;
-  
+
   if (req.user.role === "admin") {
     // Only Admin can publish directly
     if (requestedStatus === "published") {
@@ -663,6 +670,7 @@ const updatePost = catchAsync(async (req, res, next) => {
     reporterName,
     category,
     tags,
+    location,
     featuredImage,
     status,
     authorDisplayName,
@@ -688,16 +696,17 @@ const updatePost = catchAsync(async (req, res, next) => {
   const updateData = {};
   if (title) updateData.title = title.trim();
   if (content) updateData.content = content.trim();
-  
+
   // Handle subheading (accept both 'description' and 'subheading' from frontend)
   if (subheading !== undefined) {
     updateData.subheading = subheading ? subheading.trim() : "";
   } else if (description !== undefined) {
     updateData.subheading = description ? description.trim() : "";
   }
-  
+
   if (excerpt !== undefined) updateData.excerpt = excerpt ? excerpt.trim() : "";
   if (category) updateData.category = category;
+  if (location) updateData.location = location;
 
   if (tags !== undefined) {
     updateData.tags = Array.isArray(tags)
@@ -709,10 +718,10 @@ const updatePost = catchAsync(async (req, res, next) => {
     updateData.featuredImage =
       featuredImage && featuredImage.url
         ? {
-            url: featuredImage.url,
-            alt: featuredImage.alt || title || post.title,
-            caption: featuredImage.caption || "",
-          }
+          url: featuredImage.url,
+          alt: featuredImage.alt || title || post.title,
+          caption: featuredImage.caption || "",
+        }
         : undefined;
   }
 
@@ -1266,7 +1275,7 @@ const getPostLikes = catchAsync(async (req, res, next) => {
 // Get post details by ID (for modal)
 const getPostById = catchAsync(async (req, res, next) => {
   const { id } = req.params;
-  
+
   // Validate ObjectId format
   const isObjectId = /^[0-9a-fA-F]{24}$/.test(id);
   if (!isObjectId) {

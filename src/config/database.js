@@ -1,5 +1,10 @@
 const mongoose = require("mongoose");
+const dns = require("dns");
 const config = require("./index");
+
+// Override system DNS with Google's public DNS so that mongodb+srv://
+// SRV record lookups work even if the system DNS refuses them.
+dns.setServers(["8.8.8.8", "8.8.4.4", "1.1.1.1"]);
 
 class Database {
   constructor() {
@@ -37,7 +42,11 @@ class Database {
       family: 4, // Use IPv4, skip trying IPv6
     };
 
-    mongoose.connect(config.MONGODB_URI, options);
+    mongoose.connect(config.MONGODB_URI, options).catch((err) => {
+      // Error is already emitted on the 'error' event above.
+      // Catching here prevents an unhandledRejection crash.
+      console.error('❌ Initial MongoDB connection failed:', err.message);
+    });
   }
 
   static getInstance() {
