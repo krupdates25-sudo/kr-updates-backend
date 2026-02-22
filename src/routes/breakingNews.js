@@ -76,6 +76,11 @@ const storyValidation = [
       }
       return true;
     }),
+  body("location")
+    .optional()
+    .trim()
+    .isLength({ max: 100 })
+    .withMessage("Location cannot exceed 100 characters"),
 ];
 
 // Public routes

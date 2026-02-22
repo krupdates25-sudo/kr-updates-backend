@@ -77,6 +77,13 @@ const breakingNewsSchema = new mongoose.Schema(
         "General",
       ],
     },
+    location: {
+      type: String,
+      trim: true,
+      maxlength: [100, "Location cannot exceed 100 characters"],
+      default: "Kishangarh Renwal",
+      index: true,
+    },
   },
   {
     timestamps: true,
