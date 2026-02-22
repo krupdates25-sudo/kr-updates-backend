@@ -126,9 +126,10 @@ const getAllPosts = catchAsync(async (req, res, next) => {
     isVisible: { $ne: false },
   };
 
-  // Add location filter if provided
+  // Add location filter if provided — use case-insensitive partial match
+  // so "Renwal" matches "Kishangarh Renwal" and vice versa.
   if (location && location !== 'All' && location !== 'all') {
-    baseFilter.location = location;
+    baseFilter.location = { $regex: location.trim(), $options: 'i' };
   }
 
   // Optimize: select only fields needed for feed cards and keep author lean.
