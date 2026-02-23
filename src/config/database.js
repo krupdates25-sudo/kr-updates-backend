@@ -2,12 +2,17 @@ const mongoose = require("mongoose");
 const dns = require("dns");
 const config = require("./index");
 
-// Override system DNS with Google's public DNS so that mongodb+srv://
-// SRV record lookups work even if the system DNS refuses them.
-dns.setServers(["8.8.8.8", "8.8.4.4", "1.1.1.1"]);
+// Optional: Override system DNS if specifically requested or if default DNS fails
+// SRV record lookups can sometimes fail with default ISP DNS.
+try {
+  dns.setServers(["8.8.8.8", "8.8.4.4", "1.1.1.1"]);
+} catch (e) {
+  console.warn("⚠️ Custom DNS servers could not be set, using system defaults.");
+}
 
 class Database {
   constructor() {
+    this.connectionAttempts = 0;
     this.connect();
   }
 

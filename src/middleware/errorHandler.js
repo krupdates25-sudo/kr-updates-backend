@@ -58,7 +58,10 @@ module.exports = (err, req, res, next) => {
   err.statusCode = err.statusCode || 500;
   err.status = err.status || "error";
 
-  if (config.NODE_ENV === "development") {
+  // Normalize NODE_ENV check to handle extra spaces or case differences
+  const isDev = (config.NODE_ENV || "development").trim().toLowerCase() === "development";
+
+  if (isDev) {
     sendErrorDev(err, res);
   } else {
     let error = { ...err };
