@@ -184,7 +184,12 @@ const getAllPosts = catchAsync(async (req, res, next) => {
 
   const baseFilter = {
     status: "published",
-    publishedAt: { $lte: now },
+    // Include posts with publishedAt <= now OR posts without publishedAt (backward compatibility)
+    $or: [
+      { publishedAt: { $lte: now } },
+      { publishedAt: { $exists: false } },
+      { publishedAt: null },
+    ],
     isActive: true,
     // Treat missing isVisible as visible (backward compatible with old posts)
     isVisible: { $ne: false },
