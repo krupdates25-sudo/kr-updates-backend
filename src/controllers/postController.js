@@ -1367,43 +1367,36 @@ const getPostLikes = catchAsync(async (req, res, next) => {
   );
 });
 
-// Get post details by ID (optimized for speed)
+// Get post details by ID or slug (optimized for speed, supports both)
 const getPostById = catchAsync(async (req, res, next) => {
   const { id } = req.params;
 
-  // Validate ObjectId format
   const isObjectId = /^[0-9a-fA-F]{24}$/.test(id);
-  if (!isObjectId) {
-    return next(new AppError("Invalid post ID format", 400));
-  }
 
-  // Build query - admin can view draft posts, others can only view published
-  const query = {
-    _id: id,
-    isActive: true,
-  };
-
-  // Non-admin users can only see published posts
-  // Admin users can see both published and draft posts
+  // Build base visibility filter
+  const visibilityFilter = { isActive: true };
   if (req.user?.role !== "admin") {
-    query.status = "published";
+    visibilityFilter.status = "published";
   }
+
+  // Build lookup query: ObjectId takes priority, fallback to slug
+  const query = isObjectId
+    ? { _id: id, ...visibilityFilter }
+    : { slug: id, ...visibilityFilter };
 
   // Use lean() for faster queries - no Mongoose document overhead
-  const post = await Post.findOne(query)
+  let post = await Post.findOne(query)
     .populate("author", "username firstName lastName profileImage")
     .lean();
 
+  // If ObjectId lookup returned nothing but input was a slug-like string, give a clear 404
   if (!post) {
     return next(new AppError("Post not found", 404));
   }
 
   // Increment view count asynchronously (non-blocking) for published posts
   if (post.status === "published") {
-    // Fire and forget - don't wait for view count update
-    Post.findByIdAndUpdate(id, { $inc: { viewCount: 1 } }).catch(() => {
-      // Silently fail view count increment
-    });
+    Post.findByIdAndUpdate(post._id, { $inc: { viewCount: 1 } }).catch(() => {});
   }
 
   // Add like status if user is authenticated (optimized batch query)
