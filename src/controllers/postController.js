@@ -1430,9 +1430,12 @@ const getPostById = catchAsync(async (req, res, next) => {
 
   try {
     // Use lean() for faster queries - no Mongoose document overhead
+    // Select only needed fields to reduce data transfer
     let post = await Post.findOne(query)
+      .select("title subheading description excerpt content featuredImage featuredVideo tags category location publishedAt createdAt updatedAt likeCount commentCount shareCount viewCount slug readingTime isTrending isFeatured isPromoted status author reporterName authorDisplayName")
       .populate("author", "username firstName lastName profileImage")
-      .lean();
+      .lean()
+      .maxTimeMS(5000); // 5 second timeout
 
     // If post not found, return 404
     if (!post) {
@@ -1453,7 +1456,17 @@ const getPostById = catchAsync(async (req, res, next) => {
     ApiResponse.success(res, finalPost, "Post retrieved successfully");
   } catch (error) {
     console.error("Error fetching post by ID:", error);
-    return next(new AppError("Error retrieving post", 500));
+    
+    // Provide more specific error messages
+    if (error.name === 'MongoTimeoutError' || error.message?.includes('timeout')) {
+      return next(new AppError("Request timeout - The database took too long to respond. Please try again.", 504));
+    }
+    
+    if (error.name === 'CastError') {
+      return next(new AppError("Invalid post ID format", 400));
+    }
+    
+    return next(new AppError(error.message || "Error retrieving post. Please try again.", 500));
   }
 });
 
