@@ -182,17 +182,21 @@ const getAllPosts = catchAsync(async (req, res, next) => {
   const now = new Date();
   const shouldSkipCount = String(noCount).toLowerCase() === "true";
 
+  // Build filter: include published posts that are active and visible
+  // For publishedAt: include if <= now OR if missing/null (backward compatibility)
   const baseFilter = {
-    status: "published",
-    // Include posts with publishedAt <= now OR posts without publishedAt (backward compatibility)
-    $or: [
-      { publishedAt: { $lte: now } },
-      { publishedAt: { $exists: false } },
-      { publishedAt: null },
+    $and: [
+      { status: "published" },
+      { isActive: true },
+      { isVisible: { $ne: false } },
+      {
+        $or: [
+          { publishedAt: { $lte: now } },
+          { publishedAt: { $exists: false } },
+          { publishedAt: null },
+        ],
+      },
     ],
-    isActive: true,
-    // Treat missing isVisible as visible (backward compatible with old posts)
-    isVisible: { $ne: false },
   };
 
   // Location filter
