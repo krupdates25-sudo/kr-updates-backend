@@ -152,11 +152,14 @@ const getLocationOptions = catchAsync(async (req, res, next) => {
 
 // Get all posts (public)
 const getAllPosts = catchAsync(async (req, res, next) => {
-  const { page = 1, limit = 8, location } = req.query;
+  const { page = 1, limit = 8, location, noCount, locationMode } = req.query;
 
-  const skip = (parseInt(page) - 1) * parseInt(limit);
-  const limitNum = parseInt(limit);
+  const pageNum = Math.max(1, parseInt(page, 10) || 1);
+  const rawLimit = parseInt(limit, 10) || 8;
+  const limitNum = Math.min(Math.max(1, rawLimit), 50);
+  const skip = (pageNum - 1) * limitNum;
   const now = new Date();
+  const shouldSkipCount = String(noCount).toLowerCase() === "true";
 
   const baseFilter = {
     status: "published",
@@ -166,49 +169,100 @@ const getAllPosts = catchAsync(async (req, res, next) => {
     isVisible: { $ne: false },
   };
 
-  // Add location filter if provided — use case-insensitive partial match
-  // so "Renwal" matches "Kishangarh Renwal" and vice versa.
-  if (location && location !== 'All' && location !== 'all') {
-    baseFilter.location = { $regex: location.trim(), $options: 'i' };
+  // Location filter
+  // Default: exact match (fast, index-friendly) — Region chips pass exact strings.
+  // Optional: "contains" mode for search-like behavior.
+  if (location && location !== "All" && location !== "all") {
+    const trimmed = String(location).trim();
+    if (trimmed) {
+      if (String(locationMode).toLowerCase() === "contains") {
+        baseFilter.location = { $regex: trimmed, $options: "i" };
+      } else {
+        baseFilter.location = trimmed;
+      }
+    }
+  }
+
+  // Small in-memory cache for anonymous feed traffic (very common on first load).
+  // Safe because it only applies when there is no authenticated personalization.
+  const canCache = !req.user;
+  const cacheKey = canCache
+    ? `feed:${JSON.stringify({
+        page: pageNum,
+        limit: limitNum,
+        location: baseFilter.location || "All",
+        noCount: shouldSkipCount,
+        locationMode: String(locationMode || ""),
+      })}`
+    : null;
+
+  if (canCache && cacheKey) {
+    const cached = global.__kr_feedCache?.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return ApiResponse.success(res, cached.value, cached.message || "OK");
+    }
   }
 
   // Optimize: select only fields needed for feed cards and keep author lean.
   // Also run list + count in parallel to reduce overall latency.
-  const [posts, totalCount] = await Promise.all([
-    Post.find(baseFilter)
-      .select(
-        "title excerpt featuredImage featuredVideo tags category location publishedAt likeCount commentCount shareCount slug readingTime isTrending isFeatured isPromoted",
-      )
-      .populate("author", "username firstName lastName profileImage role title")
-      .sort({ publishedAt: -1 })
-      .skip(skip)
-      .limit(limitNum)
-      .lean(),
-    Post.countDocuments(baseFilter),
-  ]);
+  const baseQuery = Post.find(baseFilter)
+    .select(
+      "title excerpt featuredImage featuredVideo tags category location publishedAt likeCount commentCount shareCount slug readingTime isTrending isFeatured isPromoted",
+    )
+    .populate("author", "username firstName lastName profileImage role title")
+    .sort({ publishedAt: -1 })
+    .skip(skip);
+
+  let posts = [];
+  let totalCount = null;
+  let totalPages = null;
+  let hasMore = false;
+
+  if (shouldSkipCount) {
+    // Fast path: avoid countDocuments; fetch one extra record to compute hasMore.
+    const list = await baseQuery.limit(limitNum + 1).lean();
+    hasMore = list.length > limitNum;
+    posts = hasMore ? list.slice(0, limitNum) : list;
+  } else {
+    const result = await Promise.all([
+      baseQuery.limit(limitNum).lean(),
+      Post.countDocuments(baseFilter),
+    ]);
+    posts = result[0];
+    totalCount = result[1];
+    totalPages = Math.ceil(totalCount / limitNum);
+    hasMore = pageNum < totalPages;
+  }
 
   // Add like status if user is authenticated
   const postsWithLikeStatus = await addLikeStatusToPosts(posts, req.user?._id);
 
-  // Calculate pagination info
-  const totalPages = Math.ceil(totalCount / limitNum);
-  const hasMore = parseInt(page) < totalPages;
+  const responsePayload = {
+    data: postsWithLikeStatus,
+    pagination: {
+      page: pageNum,
+      limit: limitNum,
+      totalCount,
+      totalPages,
+      hasMore,
+    },
+    totalCount, // For backward compatibility
+    hasMore, // For backward compatibility
+  };
+
+  if (canCache && cacheKey) {
+    if (!global.__kr_feedCache) global.__kr_feedCache = new Map();
+    global.__kr_feedCache.set(cacheKey, {
+      value: responsePayload,
+      message: "Posts retrieved successfully",
+      expiresAt: Date.now() + 15 * 1000,
+    });
+  }
 
   ApiResponse.success(
     res,
-    {
-      data: postsWithLikeStatus,
-      pagination: {
-        page: parseInt(page),
-        limit: limitNum,
-        totalCount,
-        totalPages,
-        hasMore,
-      },
-      totalCount, // For backward compatibility
-      hasMore, // For backward compatibility
-    },
-    `Posts retrieved successfully (Page ${page} of ${totalPages})`,
+    responsePayload,
+    "Posts retrieved successfully",
   );
 });
 

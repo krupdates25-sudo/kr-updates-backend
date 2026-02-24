@@ -4,6 +4,12 @@ const User = require("../models/User");
 const config = require("../config");
 const { AppError } = require("../utils/appError");
 
+// Tiny in-memory cache for optionalAuth user lookups.
+// Frontend attaches Authorization header on all API calls; without this cache
+// we hit MongoDB for User.findById() on every request even when optional.
+const OPTIONAL_AUTH_CACHE_TTL_MS = 30 * 1000;
+const optionalAuthCache = new Map(); // token -> { user, expiresAt }
+
 // Protect routes - authentication required
 const protect = asyncHandler(async (req, res, next) => {
   let token;
@@ -103,8 +109,16 @@ const optionalAuth = asyncHandler(async (req, res, next) => {
 
   if (token) {
     try {
+      const cached = optionalAuthCache.get(token);
+      if (cached && cached.expiresAt > Date.now() && cached.user) {
+        req.user = cached.user;
+        return next();
+      }
+
       const decoded = jwt.verify(token, config.JWT_SECRET);
-      const currentUser = await User.findById(decoded.id).select("+isActive");
+      const currentUser = await User.findById(decoded.id).select(
+        "_id role isActive passwordChangedAt",
+      );
 
       if (
         currentUser &&
@@ -112,6 +126,10 @@ const optionalAuth = asyncHandler(async (req, res, next) => {
         !currentUser.changedPasswordAfter(decoded.iat)
       ) {
         req.user = currentUser;
+        optionalAuthCache.set(token, {
+          user: currentUser,
+          expiresAt: Date.now() + OPTIONAL_AUTH_CACHE_TTL_MS,
+        });
       }
     } catch (error) {
       // Silently fail for optional auth

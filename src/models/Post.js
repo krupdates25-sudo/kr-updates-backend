@@ -199,12 +199,6 @@ const postSchema = new mongoose.Schema(
       comment:
         "Admin can toggle post visibility - false means hidden from public",
     },
-    location: {
-      type: String,
-      trim: true,
-      maxlength: [100, "Location cannot exceed 100 characters"],
-      default: "Kishangarh Renwal",
-    },
   },
   {
     timestamps: true,
@@ -245,6 +239,17 @@ postSchema.index({ author: 1, createdAt: -1 });
 postSchema.index({ status: 1, publishedAt: -1 });
 // Optimized index for the public feed query (status + visibility + active + published date ordering)
 postSchema.index({ status: 1, isActive: 1, isVisible: 1, publishedAt: -1 });
+// Partial index optimized for public feed sorting (helps when using { isVisible: { $ne: false } })
+postSchema.index(
+  { publishedAt: -1 },
+  {
+    partialFilterExpression: {
+      status: "published",
+      isActive: true,
+      isVisible: { $ne: false },
+    },
+  },
+);
 postSchema.index({ category: 1, status: 1 });
 postSchema.index({ tags: 1 });
 postSchema.index({ slug: 1 }, { unique: true });
