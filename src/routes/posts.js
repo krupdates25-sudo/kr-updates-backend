@@ -124,6 +124,8 @@ router.get("/search", optionalAuth, postController.searchPosts);
 router.get("/locations", optionalAuth, postController.getLocationOptions);
 // Open Graph route for bots (legacy slug support)
 router.get("/og/:slug", ogController.getPostOG);
+// Temporary backward compatibility route for /details/:id (until frontend rebuilds)
+router.get("/details/:id", optionalAuth, postController.getPostById);
 
 // Specific routes that include /:id must come BEFORE the generic /:id route
 // Comments can be viewed without authentication
