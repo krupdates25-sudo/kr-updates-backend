@@ -88,26 +88,47 @@ const logActivity = async (data, req = null) => {
   }
 };
 
-// Helper function to add like status to posts
+// Helper function to add like status to posts (works with both Mongoose docs and lean objects)
 const addLikeStatusToPosts = async (posts, userId) => {
-  if (!userId || posts.length === 0) return posts;
+  if (!userId || !posts || posts.length === 0) return posts;
 
-  const postIds = posts.map((post) => post._id);
+  // Extract post IDs, filtering out any null/undefined
+  const postIds = posts
+    .map((post) => post?._id || post?.id)
+    .filter((id) => id != null);
 
-  // Get all likes for this user on these posts
-  const userLikes = await Like.find({
-    user: userId,
-    post: { $in: postIds },
-  }).select("post");
+  if (postIds.length === 0) return posts;
 
-  const likedPostIds = new Set(userLikes.map((like) => like.post.toString()));
+  try {
+    // Get all likes for this user on these posts
+    const userLikes = await Like.find({
+      user: userId,
+      post: { $in: postIds },
+    })
+      .select("post")
+      .lean();
 
-  // Add like status to each post
-  return posts.map((post) => {
-    const postObj = post.toObject ? post.toObject() : post;
-    postObj.isLiked = likedPostIds.has((post._id || post.id).toString());
-    return postObj;
-  });
+    const likedPostIds = new Set(
+      userLikes.map((like) => String(like.post || like.post?._id || ""))
+    );
+
+    // Add like status to each post (works with both Mongoose docs and lean objects)
+    return posts.map((post) => {
+      // If it's a Mongoose document, convert to plain object; otherwise use as-is (already lean)
+      const postObj = post.toObject ? post.toObject() : { ...post };
+      const postId = String(post._id || post.id || "");
+      postObj.isLiked = likedPostIds.has(postId);
+      return postObj;
+    });
+  } catch (error) {
+    // If like lookup fails, return posts without like status
+    console.error("Error adding like status to posts:", error);
+    return posts.map((post) => {
+      const postObj = post.toObject ? post.toObject() : { ...post };
+      postObj.isLiked = false;
+      return postObj;
+    });
+  }
 };
 
 // Get distinct location options for filters / creation UI
@@ -207,7 +228,7 @@ const getAllPosts = catchAsync(async (req, res, next) => {
   // Also run list + count in parallel to reduce overall latency.
   const baseQuery = Post.find(baseFilter)
     .select(
-      "title excerpt featuredImage featuredVideo tags category location publishedAt likeCount commentCount shareCount slug readingTime isTrending isFeatured isPromoted",
+      "title excerpt featuredImage featuredVideo tags category location publishedAt likeCount commentCount shareCount slug readingTime isTrending isFeatured isPromoted author",
     )
     .populate("author", "username firstName lastName profileImage role title")
     .sort({ publishedAt: -1 })
@@ -218,27 +239,37 @@ const getAllPosts = catchAsync(async (req, res, next) => {
   let totalPages = null;
   let hasMore = false;
 
-  if (shouldSkipCount) {
-    // Fast path: avoid countDocuments; fetch one extra record to compute hasMore.
-    const list = await baseQuery.limit(limitNum + 1).lean();
-    hasMore = list.length > limitNum;
-    posts = hasMore ? list.slice(0, limitNum) : list;
-  } else {
-    const result = await Promise.all([
-      baseQuery.limit(limitNum).lean(),
-      Post.countDocuments(baseFilter),
-    ]);
-    posts = result[0];
-    totalCount = result[1];
-    totalPages = Math.ceil(totalCount / limitNum);
-    hasMore = pageNum < totalPages;
+  try {
+    if (shouldSkipCount) {
+      // Fast path: avoid countDocuments; fetch one extra record to compute hasMore.
+      const list = await baseQuery.limit(limitNum + 1).lean();
+      hasMore = list.length > limitNum;
+      posts = hasMore ? list.slice(0, limitNum) : list;
+    } else {
+      const result = await Promise.all([
+        baseQuery.limit(limitNum).lean(),
+        Post.countDocuments(baseFilter),
+      ]);
+      posts = result[0] || [];
+      totalCount = result[1] || 0;
+      totalPages = Math.ceil(totalCount / limitNum);
+      hasMore = pageNum < totalPages;
+    }
+
+    // Add like status if user is authenticated
+    const postsWithLikeStatus = await addLikeStatusToPosts(posts, req.user?._id);
+    posts = postsWithLikeStatus || posts;
+  } catch (error) {
+    console.error("Error fetching posts:", error);
+    // Return empty array on error instead of crashing
+    posts = [];
+    totalCount = 0;
+    totalPages = 0;
+    hasMore = false;
   }
 
-  // Add like status if user is authenticated
-  const postsWithLikeStatus = await addLikeStatusToPosts(posts, req.user?._id);
-
   const responsePayload = {
-    data: postsWithLikeStatus,
+    data: posts,
     pagination: {
       page: pageNum,
       limit: limitNum,
@@ -1371,6 +1402,10 @@ const getPostLikes = catchAsync(async (req, res, next) => {
 const getPostById = catchAsync(async (req, res, next) => {
   const { id } = req.params;
 
+  if (!id || typeof id !== "string") {
+    return next(new AppError("Invalid post identifier", 400));
+  }
+
   const isObjectId = /^[0-9a-fA-F]{24}$/.test(id);
 
   // Build base visibility filter
@@ -1384,29 +1419,33 @@ const getPostById = catchAsync(async (req, res, next) => {
     ? { _id: id, ...visibilityFilter }
     : { slug: id, ...visibilityFilter };
 
-  // Use lean() for faster queries - no Mongoose document overhead
-  let post = await Post.findOne(query)
-    .populate("author", "username firstName lastName profileImage")
-    .lean();
+  try {
+    // Use lean() for faster queries - no Mongoose document overhead
+    let post = await Post.findOne(query)
+      .populate("author", "username firstName lastName profileImage")
+      .lean();
 
-  // If ObjectId lookup returned nothing but input was a slug-like string, give a clear 404
-  if (!post) {
-    return next(new AppError("Post not found", 404));
+    // If post not found, return 404
+    if (!post) {
+      return next(new AppError("Post not found", 404));
+    }
+
+    // Increment view count asynchronously (non-blocking) for published posts
+    if (post.status === "published" && post._id) {
+      Post.findByIdAndUpdate(post._id, { $inc: { viewCount: 1 } }).catch(() => {
+        // Silently fail view count increment
+      });
+    }
+
+    // Add like status if user is authenticated (optimized batch query)
+    const postsWithLikeStatus = await addLikeStatusToPosts([post], req.user?._id);
+    const finalPost = postsWithLikeStatus?.[0] || post;
+
+    ApiResponse.success(res, finalPost, "Post retrieved successfully");
+  } catch (error) {
+    console.error("Error fetching post by ID:", error);
+    return next(new AppError("Error retrieving post", 500));
   }
-
-  // Increment view count asynchronously (non-blocking) for published posts
-  if (post.status === "published") {
-    Post.findByIdAndUpdate(post._id, { $inc: { viewCount: 1 } }).catch(() => {});
-  }
-
-  // Add like status if user is authenticated (optimized batch query)
-  const postWithLikeStatus = await addLikeStatusToPosts([post], req.user?._id);
-
-  ApiResponse.success(
-    res,
-    postWithLikeStatus[0],
-    "Post retrieved successfully",
-  );
 });
 
 // Recursive function to populate all nested replies
