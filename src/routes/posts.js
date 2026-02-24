@@ -121,6 +121,8 @@ router.get(
 );
 router.get("/search", optionalAuth, postController.searchPosts);
 router.get("/details/:id", optionalAuth, postController.getPostById);
+// Locations options for UI filters / creation suggestions (must be before /:slug)
+router.get("/locations", optionalAuth, postController.getLocationOptions);
 // Open Graph route for bots (must be before /:slug route)
 router.get("/og/:slug", ogController.getPostOG);
 router.get("/:slug", optionalAuth, postController.getPostBySlug);

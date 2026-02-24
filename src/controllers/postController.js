@@ -110,6 +110,46 @@ const addLikeStatusToPosts = async (posts, userId) => {
   });
 };
 
+// Get distinct location options for filters / creation UI
+// - Public users: only published & active posts
+// - Staff (admin/mod/author): include drafts too (so new locations show up immediately after creation)
+const getLocationOptions = catchAsync(async (req, res, next) => {
+  const now = new Date();
+  const isStaff = !!req.user && ["admin", "moderator", "author"].includes(req.user.role);
+
+  const match = {
+    isActive: true,
+    isVisible: { $ne: false },
+    location: { $exists: true, $type: "string" },
+  };
+
+  if (!isStaff) {
+    match.status = "published";
+    match.publishedAt = { $lte: now };
+  }
+
+  const rows = await Post.aggregate([
+    { $match: match },
+    {
+      $project: {
+        location: { $trim: { input: "$location" } },
+      },
+    },
+    { $match: { location: { $ne: "" } } },
+    { $group: { _id: "$location", count: { $sum: 1 } } },
+    { $sort: { count: -1, _id: 1 } },
+    { $limit: 100 },
+  ]);
+
+  const locations = rows.map((r) => r._id);
+
+  ApiResponse.success(
+    res,
+    { locations: ["All", ...locations] },
+    "Location options retrieved successfully",
+  );
+});
+
 // Get all posts (public)
 const getAllPosts = catchAsync(async (req, res, next) => {
   const { page = 1, limit = 8, location } = req.query;
@@ -1796,6 +1836,7 @@ const checkBookmarkStatus = catchAsync(async (req, res, next) => {
 });
 
 module.exports = {
+  getLocationOptions,
   getAllPosts,
   getTrendingPosts,
   getFeaturedPosts,
