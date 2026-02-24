@@ -4,6 +4,7 @@ const Like = require("../models/Like");
 const Comment = require("../models/Comment");
 const Activity = require("../models/Activity");
 const Bookmark = require("../models/Bookmark");
+const mongoose = require("mongoose");
 const catchAsync = require("../utils/catchAsync");
 const { AppError } = require("../utils/appError");
 const ApiResponse = require("../utils/apiResponse");
