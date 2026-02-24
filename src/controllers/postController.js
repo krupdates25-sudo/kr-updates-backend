@@ -1367,7 +1367,7 @@ const getPostLikes = catchAsync(async (req, res, next) => {
   );
 });
 
-// Get post details by ID (for modal)
+// Get post details by ID (optimized for speed)
 const getPostById = catchAsync(async (req, res, next) => {
   const { id } = req.params;
 
@@ -1389,21 +1389,24 @@ const getPostById = catchAsync(async (req, res, next) => {
     query.status = "published";
   }
 
-  const post = await Post.findOne(query).populate(
-    "author",
-    "username firstName lastName profileImage"
-  );
+  // Use lean() for faster queries - no Mongoose document overhead
+  const post = await Post.findOne(query)
+    .populate("author", "username firstName lastName profileImage")
+    .lean();
 
   if (!post) {
     return next(new AppError("Post not found", 404));
   }
 
-  // Only increment view count for published posts
+  // Increment view count asynchronously (non-blocking) for published posts
   if (post.status === "published") {
-    await post.incrementViewCount();
+    // Fire and forget - don't wait for view count update
+    Post.findByIdAndUpdate(id, { $inc: { viewCount: 1 } }).catch(() => {
+      // Silently fail view count increment
+    });
   }
 
-  // Add like status if user is authenticated
+  // Add like status if user is authenticated (optimized batch query)
   const postWithLikeStatus = await addLikeStatusToPosts([post], req.user?._id);
 
   ApiResponse.success(

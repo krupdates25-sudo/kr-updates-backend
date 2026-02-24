@@ -120,12 +120,12 @@ router.get(
   postController.getPostsByCategory,
 );
 router.get("/search", optionalAuth, postController.searchPosts);
-router.get("/details/:id", optionalAuth, postController.getPostById);
-// Locations options for UI filters / creation suggestions (must be before /:slug)
+// Post details by ID (primary route - faster than slug lookup)
+router.get("/:id", optionalAuth, postController.getPostById);
+// Locations options for UI filters / creation suggestions
 router.get("/locations", optionalAuth, postController.getLocationOptions);
-// Open Graph route for bots (must be before /:slug route)
+// Open Graph route for bots (legacy slug support)
 router.get("/og/:slug", ogController.getPostOG);
-router.get("/:slug", optionalAuth, postController.getPostBySlug);
 
 // Comments can be viewed without authentication
 router.get("/:id/comments", optionalAuth, postController.getComments);
