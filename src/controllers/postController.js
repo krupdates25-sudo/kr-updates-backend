@@ -1431,15 +1431,38 @@ const getPostById = catchAsync(async (req, res, next) => {
   try {
     // Use lean() for faster queries - no Mongoose document overhead
     // Select only needed fields to reduce data transfer
+    // Use faster query with minimal populate
     let post = await Post.findOne(query)
       .select("title subheading description excerpt content featuredImage featuredVideo tags category location publishedAt createdAt updatedAt likeCount commentCount shareCount viewCount slug readingTime isTrending isFeatured isPromoted status author reporterName authorDisplayName")
-      .populate("author", "username firstName lastName profileImage")
+      .populate({
+        path: "author",
+        select: "username firstName lastName profileImage",
+        options: { lean: true }
+      })
       .lean()
-      .maxTimeMS(5000); // 5 second timeout
+      .maxTimeMS(3000); // 3 second timeout - faster fail
 
     // If post not found, return 404
     if (!post) {
       return next(new AppError("Post not found", 404));
+    }
+
+    // If author populate failed (author is ObjectId string), fetch author separately
+    if (post.author && typeof post.author === 'string' && mongoose.Types.ObjectId.isValid(post.author)) {
+      try {
+        const author = await User.findById(post.author)
+          .select("username firstName lastName profileImage")
+          .lean()
+          .maxTimeMS(1000);
+        if (author) {
+          post.author = author;
+        } else {
+          post.author = { username: 'Unknown', firstName: '', lastName: '' };
+        }
+      } catch (authorError) {
+        // If author fetch fails, continue with minimal author data
+        post.author = { username: 'Unknown', firstName: '', lastName: '' };
+      }
     }
 
     // Increment view count asynchronously (non-blocking) for published posts
@@ -1449,9 +1472,30 @@ const getPostById = catchAsync(async (req, res, next) => {
       });
     }
 
-    // Add like status if user is authenticated (optimized batch query)
-    const postsWithLikeStatus = await addLikeStatusToPosts([post], req.user?._id);
-    const finalPost = postsWithLikeStatus?.[0] || post;
+    // Add like status if user is authenticated - make it non-blocking (don't wait)
+    let finalPost = post;
+    if (req.user?._id) {
+      try {
+        // Try to get like status with timeout, but don't block if it fails
+        const likeStatusPromise = Like.findOne({
+          user: req.user._id,
+          post: post._id,
+        })
+          .select("_id")
+          .lean()
+          .maxTimeMS(1000); // 1 second max for like check
+        
+        const likeStatus = await Promise.race([
+          likeStatusPromise,
+          new Promise((resolve) => setTimeout(() => resolve(null), 1000))
+        ]);
+        
+        finalPost = { ...post, isLiked: !!likeStatus };
+      } catch (likeError) {
+        // If like check fails, just use post without like status
+        finalPost = post;
+      }
+    }
 
     ApiResponse.success(res, finalPost, "Post retrieved successfully");
   } catch (error) {
