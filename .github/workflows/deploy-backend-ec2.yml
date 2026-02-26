@@ -86,5 +86,5 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
             npm ci --omit=dev
-            pm2 restart kr-updates-backend || pm2 start ecosystem.config.js
+            pm2 reload ecosystem.config.js 2>/dev/null || pm2 start ecosystem.config.js
             pm2 save
