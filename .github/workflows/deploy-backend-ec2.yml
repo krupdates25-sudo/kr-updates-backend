@@ -77,8 +77,8 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           # Private key (full content of your RSA/OpenSSH private key)
           key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-          # Uncomment next line ONLY if your private key has a passphrase
-          # passphrase: ${{ secrets.EC2_SSH_PASSPHRASE }}
+          # Required when your private key is passphrase-protected
+          passphrase: ${{ secrets.EC2_SSH_PASSPHRASE }}
           # Script that runs ON the EC2 server
           script: |
             set -e
