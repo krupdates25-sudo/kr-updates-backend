@@ -8,6 +8,7 @@ module.exports = {
       name: "kr-updates-backend",
       cwd: __dirname,
       script: "src/app.js",
+      exec_mode: "fork",
       instances: 1,
       autorestart: true,
       watch: false,
