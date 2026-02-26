@@ -102,7 +102,14 @@ app.get("/health", (req, res) => {
   });
 });
 
-// CI/CD test endpoint - use this to verify deploy to EC2 worked
+// CI/CD test endpoints - verify deploy to EC2 (root and API path)
+app.get("/ci-cd", (req, res) => {
+  res.status(200).json({
+    message: "Hi this is CI CD response",
+    deployedAt: new Date().toISOString(),
+    environment: config.NODE_ENV,
+  });
+});
 app.get("/api/v1/ci-cd", (req, res) => {
   res.status(200).json({
     message: "Hi this is CI CD response",

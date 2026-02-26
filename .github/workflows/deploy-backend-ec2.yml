@@ -85,6 +85,8 @@ jobs:
             cd /home/ubuntu/kr-updates-backend
             git fetch origin main
             git reset --hard origin/main
+            git log -1 --oneline
             npm ci --omit=dev
-            pm2 reload ecosystem.config.js 2>/dev/null || pm2 start ecosystem.config.js
+            pm2 delete kr-updates-backend 2>/dev/null || true
+            pm2 start ecosystem.config.js
             pm2 save
