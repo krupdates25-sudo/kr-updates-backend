@@ -118,6 +118,24 @@ app.get("/api/v1/ci-cd", (req, res) => {
   });
 });
 
+// CI/CD pipeline test - deployed via GitHub Actions (emoji = pipeline ran)
+app.get("/ci-cd-pipeline", (req, res) => {
+  res.status(200).json({
+    message: "🚀 CI/CD pipeline deployed this!",
+    deployedAt: new Date().toISOString(),
+    environment: config.NODE_ENV,
+    source: "GitHub Actions → EC2",
+  });
+});
+app.get("/api/v1/ci-cd-pipeline", (req, res) => {
+  res.status(200).json({
+    message: "🚀 CI/CD pipeline deployed this!",
+    deployedAt: new Date().toISOString(),
+    environment: config.NODE_ENV,
+    source: "GitHub Actions → EC2",
+  });
+});
+
 // API routes
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/users", userRoutes);
