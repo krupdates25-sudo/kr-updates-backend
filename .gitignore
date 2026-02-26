@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-package-lock.json
 
 # Environment variables
 .env
@@ -56,5 +55,4 @@ Thumbs.db
 *.temp
 .cache/
 
-# Optional: Keep package-lock.json (uncomment if you want to ignore it)
-# package-lock.json
+# package-lock.json is committed so CI (npm ci) and cache work
