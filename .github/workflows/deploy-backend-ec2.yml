@@ -1,0 +1,90 @@
+# =============================================================================
+# Deploy Backend to EC2 - GitHub Actions Workflow
+# =============================================================================
+# This workflow runs when you push to 'main'. It:
+#   1. Runs tests (lint + unit tests)
+#   2. If tests pass, SSHs into your EC2 and deploys the latest code
+# =============================================================================
+
+name: Deploy Backend to EC2
+
+# -----------------------------------------------------------------------------
+# WHEN DOES THIS RUN?
+# -----------------------------------------------------------------------------
+# - push to branch "main"  → run on every push to main
+# - workflow_dispatch      → run manually from Actions tab ("Run workflow")
+# -----------------------------------------------------------------------------
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+# -----------------------------------------------------------------------------
+# SHARED ENVIRONMENT (used in jobs unless overridden)
+# -----------------------------------------------------------------------------
+env:
+  NODE_VERSION: "18"
+
+jobs:
+  # ===========================================================================
+  # JOB 1: TEST
+  # ===========================================================================
+  # Runs on GitHub's Ubuntu runner. Must succeed before deploy runs.
+  # ---------------------------------------------------------------------------
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+
+    steps:
+      # --- Checkout this repo so we have the code ---
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # --- Install Node.js and use npm cache for speed ---
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      # --- Install dependencies (same as production install, no dev) ---
+      - run: npm ci
+
+      # --- Run linter ---
+      - run: npm run lint
+
+      # --- Run tests (use npm test or npm run test:coverage as in your package.json) ---
+      - run: npm test
+
+  # ===========================================================================
+  # JOB 2: DEPLOY
+  # ===========================================================================
+  # Runs only if "test" job succeeds. SSHs to EC2 and updates the app.
+  # ---------------------------------------------------------------------------
+  deploy:
+    name: Deploy to EC2
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      # --- No checkout needed; we run commands ON the server ---
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          # Where to connect (from repo secret)
+          host: ${{ secrets.EC2_HOST }}
+          # SSH user (e.g. ubuntu)
+          username: ${{ secrets.EC2_USER }}
+          # Private key (full content of your RSA/OpenSSH private key)
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          # Uncomment next line ONLY if your private key has a passphrase
+          # passphrase: ${{ secrets.EC2_SSH_PASSPHRASE }}
+          # Script that runs ON the EC2 server
+          script: |
+            set -e
+            cd /home/ubuntu/kr-updates-backend
+            git fetch origin main
+            git reset --hard origin/main
+            npm ci --omit=dev
+            pm2 restart kr-updates-backend || pm2 start ecosystem.config.js
+            pm2 save
