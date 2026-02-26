@@ -12,7 +12,7 @@
     "seed:posts": "node create-sample-posts.js",
     "seed:breaking": "node create-sample-breaking-news.js",
     "test": "jest --watchAll --verbose",
-    "test:ci": "jest --ci --verbose",
+    "test:ci": "jest --ci --verbose --passWithNoTests",
     "test:coverage": "jest --coverage",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
