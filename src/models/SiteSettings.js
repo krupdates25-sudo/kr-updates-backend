@@ -177,6 +177,18 @@ const siteSettingsSchema = new mongoose.Schema(
       trim: true,
       maxlength: [500, "Maintenance message cannot exceed 500 characters"],
     },
+    // White-labeling: site-wide theme (light | dark | system)
+    theme: {
+      type: String,
+      enum: ["light", "dark", "system"],
+      default: "light",
+    },
+    // White-labeling: typography applied across the frontend
+    typography: {
+      fontFamily: { type: String, trim: true, default: "Inter" },
+      headingFontFamily: { type: String, trim: true, default: "Playfair Display" },
+      baseFontSize: { type: String, trim: true, default: "16px" },
+    },
     lastUpdatedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

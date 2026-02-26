@@ -129,6 +129,8 @@ const updateSettings = catchAsync(async (req, res, next) => {
     seo,
     maintenanceMode,
     maintenanceMessage,
+    theme,
+    typography,
   } = req.body;
 
   // Get or create settings
@@ -185,16 +187,32 @@ const updateSettings = catchAsync(async (req, res, next) => {
   }
 
   if (seo !== undefined) {
+    if (!settings.seo) settings.seo = {};
     if (seo.metaTitle !== undefined) settings.seo.metaTitle = seo.metaTitle;
     if (seo.metaDescription !== undefined)
       settings.seo.metaDescription = seo.metaDescription;
     if (seo.metaKeywords !== undefined)
-      settings.seo.metaKeywords = seo.metaKeywords;
+      settings.seo.metaKeywords = Array.isArray(seo.metaKeywords) ? seo.metaKeywords : [];
   }
   if (maintenanceMode !== undefined)
     settings.maintenanceMode = maintenanceMode;
   if (maintenanceMessage !== undefined)
     settings.maintenanceMessage = maintenanceMessage;
+  if (theme !== undefined) {
+    if (!["light", "dark", "system"].includes(theme)) {
+      return next(new AppError("theme must be light, dark, or system", 400));
+    }
+    settings.theme = theme;
+  }
+  if (typography !== undefined) {
+    if (!settings.typography) settings.typography = {};
+    if (typography.fontFamily !== undefined)
+      settings.typography.fontFamily = typography.fontFamily;
+    if (typography.headingFontFamily !== undefined)
+      settings.typography.headingFontFamily = typography.headingFontFamily;
+    if (typography.baseFontSize !== undefined)
+      settings.typography.baseFontSize = typography.baseFontSize;
+  }
 
   // Set last updated by
   settings.lastUpdatedBy = req.user._id;
