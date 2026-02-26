@@ -53,8 +53,8 @@ jobs:
       # --- Run linter ---
       - run: npm run lint
 
-      # --- Run tests (use npm test or npm run test:coverage as in your package.json) ---
-      - run: npm test
+      # --- Run tests once (no watch mode; watch is for local dev only) ---
+      - run: npm run test:ci
 
   # ===========================================================================
   # JOB 2: DEPLOY
