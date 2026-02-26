@@ -122,14 +122,13 @@ const globalSearch = catchAsync(async (req, res, next) => {
         id: announcement._id,
         title: announcement.title,
         message: announcement.message,
-        type: announcement.type,
+        type: "announcement",
         priority: announcement.priority,
         icon: announcement.icon,
         actionUrl: announcement.actionUrl,
         actionText: announcement.actionText,
         createdAt: announcement.createdAt,
         createdBy: announcement.createdBy,
-        type: "announcement",
       })),
       categories: categories.map((category) => ({
         name: category,
@@ -167,8 +166,6 @@ const searchPosts = catchAsync(async (req, res, next) => {
     ],
     status: "published",
     isActive: true,
-    // Backward compatible: include old posts missing isVisible
-    isVisible: { $ne: false },
     // Backward compatible: include old posts missing isVisible
     isVisible: { $ne: false },
   })
