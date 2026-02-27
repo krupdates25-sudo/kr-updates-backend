@@ -4,6 +4,7 @@ const SCHEDULE_URL = "https://www.bhaskar.com/__widgets-api__/ipl/schedule-cards
 const STATE_NEWS_URL = "https://prod.bhaskarapi.com/api/1.0/web-backend/state-news/list";
 const CRICKET_FEED_URL =
   "https://www.bhaskar.com/__api__/api/2.0/feed/category/listingUrl/sports/cricket/";
+const STORY_DETAILS_BASE_URL = "https://www.bhaskar.com/__api__/api/1.0/feed/story/filename/";
 
 // Simple in-memory cache to avoid hammering Bhaskar endpoints
 const CACHE = new Map(); // key -> { data, expiresAt }
@@ -185,6 +186,74 @@ exports.getCricketFeed = async (req, res) => {
       payload || {
         success: false,
         message: "Failed to fetch cricket feed from Bhaskar",
+        error: error.message,
+      }
+    );
+  }
+};
+
+// Helper function to extract filename from shortUrl
+// Example: "/local/uttar-pradesh/mathura/news/vrindavan-rang-bharai-ekadashi-holika-parikrama-brij-bhakti-137310716.html"
+// Returns: "vrindavan-rang-bharai-ekadashi-holika-parikrama-brij-bhakti-137310716"
+function extractFilenameFromShortUrl(shortUrl) {
+  if (!shortUrl || typeof shortUrl !== "string") return null;
+
+  // Remove leading slash if present
+  let path = shortUrl.startsWith("/") ? shortUrl.slice(1) : shortUrl;
+
+  // Remove .html extension
+  path = path.replace(/\.html$/, "");
+
+  // Extract the last segment (filename)
+  const segments = path.split("/");
+  return segments.length > 0 ? segments[segments.length - 1] : null;
+}
+
+// GET /api/v1/bhaskar/story/:filename
+// or GET /api/v1/bhaskar/story?shortUrl=...
+exports.getStoryDetails = async (req, res) => {
+  try {
+    let filename = req.params.filename;
+
+    // If filename not in params, try to extract from shortUrl query param
+    if (!filename && req.query.shortUrl) {
+      filename = extractFilenameFromShortUrl(req.query.shortUrl);
+    }
+
+    if (!filename) {
+      return res.status(400).json({
+        success: false,
+        message: "Filename is required. Provide either :filename param or shortUrl query param.",
+      });
+    }
+
+    const cacheKey = `story_details:${filename}`;
+    const cached = cacheGet(cacheKey);
+    if (cached) {
+      res.setHeader("x-cache", "HIT");
+      return res.status(200).json(cached);
+    }
+
+    const url = `${STORY_DETAILS_BASE_URL}${encodeURIComponent(filename)}`;
+
+    // Use similar headers as cricket feed
+    const headers = {
+      ...CRICKET_FEED_HEADERS,
+      referer: "https://www.bhaskar.com/",
+    };
+
+    const json = await fetchJson(url, headers);
+    cacheSet(cacheKey, json, TTL_SHORT);
+    res.setHeader("x-cache", "MISS");
+    res.status(200).json(json);
+  } catch (error) {
+    const status = Number(error.statusCode) || 500;
+    const payload = error.payload || null;
+    console.error("Error fetching Bhaskar story details:", error.message);
+    res.status(status).json(
+      payload || {
+        success: false,
+        message: "Failed to fetch story details from Bhaskar",
         error: error.message,
       }
     );
