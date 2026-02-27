@@ -39,6 +39,7 @@ const notificationRoutes = require("./routes/notifications");
 const settingsRoutes = require("./routes/settings");
 const updatesRoutes = require("./routes/updates");
 const translateRoutes = require("./routes/translateRoutes");
+const bhaskarRoutes = require("./routes/bhaskar");
 
 // Initialize database
 Database.getInstance();
@@ -150,6 +151,7 @@ app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/settings", settingsRoutes);
 app.use("/api/v1/updates", updatesRoutes);
 app.use("/api/v1/translate", translateRoutes);
+app.use("/api/v1/bhaskar", bhaskarRoutes);
 
 // Handle undefined routes
 app.all("*", (req, res, next) => {
