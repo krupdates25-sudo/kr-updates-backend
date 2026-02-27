@@ -131,6 +131,7 @@ const updateSettings = catchAsync(async (req, res, next) => {
     maintenanceMessage,
     theme,
     typography,
+    colorPalette,
   } = req.body;
 
   // Get or create settings
@@ -212,6 +213,13 @@ const updateSettings = catchAsync(async (req, res, next) => {
       settings.typography.headingFontFamily = typography.headingFontFamily;
     if (typography.baseFontSize !== undefined)
       settings.typography.baseFontSize = typography.baseFontSize;
+  }
+  if (colorPalette !== undefined) {
+    if (!settings.colorPalette) settings.colorPalette = {};
+    if (colorPalette.primaryColor !== undefined)
+      settings.colorPalette.primaryColor = colorPalette.primaryColor;
+    if (colorPalette.accentColor !== undefined)
+      settings.colorPalette.accentColor = colorPalette.accentColor;
   }
 
   // Set last updated by

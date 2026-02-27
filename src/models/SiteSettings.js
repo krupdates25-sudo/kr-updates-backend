@@ -189,6 +189,11 @@ const siteSettingsSchema = new mongoose.Schema(
       headingFontFamily: { type: String, trim: true, default: "Playfair Display" },
       baseFontSize: { type: String, trim: true, default: "16px" },
     },
+    // White-labeling: color palette for user-facing panel (buttons, accents, nav)
+    colorPalette: {
+      primaryColor: { type: String, trim: true, default: "#2563eb" },
+      accentColor: { type: String, trim: true, default: "#1d4ed8" },
+    },
     lastUpdatedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
