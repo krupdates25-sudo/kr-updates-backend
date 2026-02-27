@@ -254,6 +254,24 @@ const corsOptions = {
   ],
 };
 
+// When someone directly opens an API URL in the browser (navigation),
+// force download instead of rendering JSON in-page.
+// This does NOT affect normal fetch/XHR calls (sec-fetch-mode !== navigate).
+const apiNavigationDownload = (req, res, next) => {
+  // Avoid search engine indexing of API endpoints
+  res.setHeader("X-Robots-Tag", "noindex, nofollow, nosnippet");
+
+  const mode = String(req.headers["sec-fetch-mode"] || "").toLowerCase();
+  const accept = String(req.headers.accept || "").toLowerCase();
+
+  // Navigation requests typically have sec-fetch-mode: navigate or accept: text/html
+  const isNavigate = mode === "navigate" || accept.includes("text/html");
+  if (isNavigate) {
+    res.setHeader("Content-Disposition", 'attachment; filename="api.json"');
+  }
+  next();
+};
+
 module.exports = {
   generalLimiter,
   authLimiter,
@@ -266,4 +284,5 @@ module.exports = {
   securityLogger,
   ipWhitelist,
   corsOptions,
+  apiNavigationDownload,
 };

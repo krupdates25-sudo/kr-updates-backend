@@ -19,6 +19,7 @@ const {
   hppConfig,
   securityLogger,
   corsOptions,
+  apiNavigationDownload,
 } = require("./middleware/security");
 
 // Import error handling
@@ -48,6 +49,9 @@ Database.getInstance();
 const app = express();
 const server = http.createServer(app);
 
+// Hide Express fingerprint
+app.disable("x-powered-by");
+
 // Create Socket.IO instance
 const io = new Server(server, {
   cors: {
@@ -76,6 +80,7 @@ app.use(mongoSanitizeConfig);
 app.use(xssProtection);
 app.use(hppConfig);
 app.use(securityLogger);
+app.use("/api", apiNavigationDownload);
 
 // Body parsing middleware
 app.use(express.json({ limit: "10mb" }));
