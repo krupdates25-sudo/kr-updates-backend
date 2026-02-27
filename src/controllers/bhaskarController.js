@@ -42,22 +42,23 @@ const STATE_NEWS_HEADERS = {
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
 };
 
-// Headers for Bhaskar cricket category feed (kept close to the user's curl)
-// NOTE: tokens like `at/rt/uid` may expire; keep them configurable via env in production.
+// Headers for Bhaskar cricket category feed (kept close to the user's working curl)
+// NOTE: These token values may eventually expire; if the feed breaks with 401 again,
+// update them from a fresh curl the same way you shared above.
 const CRICKET_FEED_HEADERS = {
   accept: "*/*",
   "accept-language": STATE_NEWS_HEADERS["accept-language"],
   cid: STATE_NEWS_HEADERS.cid,
   dtyp: STATE_NEWS_HEADERS.dtyp,
-  uid: process.env.BHASKAR_UID || STATE_NEWS_HEADERS.uid,
-  at: process.env.BHASKAR_AT || STATE_NEWS_HEADERS.at,
-  rt: process.env.BHASKAR_RT || STATE_NEWS_HEADERS.rt,
+  uid: STATE_NEWS_HEADERS.uid,
+  at: STATE_NEWS_HEADERS.at,
+  rt: STATE_NEWS_HEADERS.rt,
   origin: "https://www.bhaskar.com",
   referer: "https://www.bhaskar.com/sports/cricket/",
   "user-agent": STATE_NEWS_HEADERS["user-agent"],
-  // Some Bhaskar endpoints also accept these tokens in cookies
-  cookie: `at=${process.env.BHASKAR_AT || STATE_NEWS_HEADERS.at}; rt=${process.env.BHASKAR_RT || STATE_NEWS_HEADERS.rt}; uid=${process.env.BHASKAR_UID || STATE_NEWS_HEADERS.uid}`,
-  ...(process.env.BHASKAR_X_AUT_WEB_T ? { "x-aut-web-t": process.env.BHASKAR_X_AUT_WEB_T } : {}),
+  // Auth cookies (only the important ones)
+  cookie: `at=${STATE_NEWS_HEADERS.at}; rt=${STATE_NEWS_HEADERS.rt}; uid=${STATE_NEWS_HEADERS.uid}`,
+  "x-aut-web-t": "420x66695ztde3qao6a69",
 };
 
 function fetchJson(url, headers = {}) {
