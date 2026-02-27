@@ -74,12 +74,29 @@ function fetchJson(url, headers = {}) {
           data += chunk;
         });
         res.on("end", () => {
+          const statusCode = res.statusCode || 0;
+          let parsed = null;
           try {
-            const json = JSON.parse(data);
-            resolve(json);
-          } catch (err) {
-            reject(err);
+            parsed = data ? JSON.parse(data) : null;
+          } catch {
+            parsed = null;
           }
+
+          if (statusCode < 200 || statusCode >= 300) {
+            const err = new Error(`Upstream responded ${statusCode}`);
+            err.statusCode = statusCode;
+            err.payload = parsed || { raw: data };
+            return reject(err);
+          }
+
+          if (parsed == null) {
+            const err = new Error("Invalid JSON from upstream");
+            err.statusCode = 502;
+            err.payload = { raw: data };
+            return reject(err);
+          }
+
+          resolve(parsed);
         });
       }
     );
@@ -135,17 +152,41 @@ exports.getCricketFeed = async (req, res) => {
       return res.status(200).json(cached);
     }
 
-    const json = await fetchJson(url, CRICKET_FEED_HEADERS);
+    // Allow overriding tokens per-request (useful when tokens rotate)
+    const at = typeof req.query.at === "string" ? req.query.at : "";
+    const rt = typeof req.query.rt === "string" ? req.query.rt : "";
+    const uid = typeof req.query.uid === "string" ? req.query.uid : "";
+    const xAutWebT =
+      typeof req.query.xAutWebT === "string"
+        ? req.query.xAutWebT
+        : typeof req.query["x-aut-web-t"] === "string"
+          ? req.query["x-aut-web-t"]
+          : "";
+
+    const headers = { ...CRICKET_FEED_HEADERS };
+    if (uid) headers.uid = uid;
+    if (at) headers.at = at;
+    if (rt) headers.rt = rt;
+    if (xAutWebT) headers["x-aut-web-t"] = xAutWebT;
+    if (uid || at || rt) {
+      headers.cookie = `at=${at || headers.at}; rt=${rt || headers.rt}; uid=${uid || headers.uid}`;
+    }
+
+    const json = await fetchJson(url, headers);
     cacheSet(cacheKey, json, TTL_SHORT);
     res.setHeader("x-cache", "MISS");
     res.status(200).json(json);
   } catch (error) {
+    const status = Number(error.statusCode) || 500;
+    const payload = error.payload || null;
     console.error("Error fetching Bhaskar cricket feed:", error.message);
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch cricket feed from Bhaskar",
-      error: error.message,
-    });
+    res.status(status).json(
+      payload || {
+        success: false,
+        message: "Failed to fetch cricket feed from Bhaskar",
+        error: error.message,
+      }
+    );
   }
 };
 
