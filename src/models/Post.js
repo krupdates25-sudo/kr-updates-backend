@@ -96,6 +96,27 @@ const postSchema = new mongoose.Schema(
         maxlength: [200, "Caption cannot exceed 200 characters"],
       },
     },
+    images: [
+      {
+        url: {
+          type: String,
+          validate: {
+            validator: function (v) {
+              return !v || validator.isURL(v);
+            },
+            message: "Please provide a valid image URL",
+          },
+        },
+        alt: {
+          type: String,
+          maxlength: [100, "Alt text cannot exceed 100 characters"],
+        },
+        caption: {
+          type: String,
+          maxlength: [200, "Caption cannot exceed 200 characters"],
+        },
+      },
+    ],
     tags: [
       {
         type: String,

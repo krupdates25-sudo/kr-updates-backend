@@ -33,6 +33,22 @@ const breakingNewsSchema = new mongoose.Schema(
         default: "",
       },
     },
+    images: [
+      {
+        url: {
+          type: String,
+          required: true,
+        },
+        alt: {
+          type: String,
+          default: "",
+        },
+        caption: {
+          type: String,
+          default: "",
+        },
+      },
+    ],
     priority: {
       type: Number,
       default: 1,
@@ -83,6 +99,11 @@ const breakingNewsSchema = new mongoose.Schema(
       maxlength: [100, "Location cannot exceed 100 characters"],
       default: "Kishangarh Renwal",
       index: true,
+    },
+    viewCount: {
+      type: Number,
+      default: 0,
+      min: [0, "View count cannot be negative"],
     },
   },
   {

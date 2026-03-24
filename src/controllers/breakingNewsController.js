@@ -266,6 +266,11 @@ const getStoryById = async (req, res) => {
       });
     }
 
+    if (story.isActive) {
+      await BreakingNews.findByIdAndUpdate(story._id, { $inc: { viewCount: 1 } });
+      story.viewCount = (story.viewCount || 0) + 1;
+    }
+
     res.status(200).json({
       success: true,
       data: story,
@@ -300,6 +305,9 @@ const getPublicStoryById = async (req, res) => {
       });
     }
 
+    await BreakingNews.findByIdAndUpdate(story._id, { $inc: { viewCount: 1 } });
+    story.viewCount = (story.viewCount || 0) + 1;
+
     res.status(200).json({
       success: true,
       data: story,
@@ -326,8 +334,19 @@ const createStory = async (req, res) => {
       });
     }
 
+    const normalizedImages = Array.isArray(req.body.images)
+      ? req.body.images
+          .filter((img) => img && img.url)
+          .map((img) => ({
+            url: String(img.url).trim(),
+            alt: String(img.alt || req.body.title || "").trim(),
+            caption: String(img.caption || "").trim(),
+          }))
+      : [];
+
     const storyData = {
       ...req.body,
+      images: normalizedImages,
       createdBy: req.user.id,
     };
 
@@ -387,10 +406,23 @@ const updateStory = async (req, res) => {
       });
     }
 
+    const normalizedImages = Array.isArray(req.body.images)
+      ? req.body.images
+          .filter((img) => img && img.url)
+          .map((img) => ({
+            url: String(img.url).trim(),
+            alt: String(img.alt || req.body.title || story.title || "").trim(),
+            caption: String(img.caption || "").trim(),
+          }))
+      : undefined;
+
     const updateData = {
       ...req.body,
       updatedBy: req.user.id,
     };
+    if (normalizedImages !== undefined) {
+      updateData.images = normalizedImages;
+    }
 
     const updatedStory = await BreakingNews.findByIdAndUpdate(id, updateData, {
       new: true,

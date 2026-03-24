@@ -238,7 +238,7 @@ const getAllPosts = catchAsync(async (req, res, next) => {
   // Also run list + count in parallel to reduce overall latency.
   const baseQuery = Post.find(baseFilter)
     .select(
-      "title excerpt featuredImage featuredVideo tags category location publishedAt likeCount commentCount shareCount slug readingTime isTrending isFeatured isPromoted author",
+      "title excerpt featuredImage featuredVideo images tags category location publishedAt likeCount commentCount shareCount viewCount slug readingTime isTrending isFeatured isPromoted author",
     )
     .populate("author", "username firstName lastName profileImage role title")
     .sort({ publishedAt: -1 })
@@ -634,6 +634,7 @@ const createPost = catchAsync(async (req, res, next) => {
     location,
     featuredImage,
     featuredVideo,
+    images,
   } = req.body;
 
   // Create post object
@@ -642,7 +643,7 @@ const createPost = catchAsync(async (req, res, next) => {
     content: content.trim(),
     author: req.user._id,
     category,
-    location: location || "Kishangarh Renwal",
+    location: String(location || "Kishangarh Renwal").trim() || "Kishangarh Renwal",
     status: "draft", // Always start as draft
   };
 
@@ -684,6 +685,16 @@ const createPost = catchAsync(async (req, res, next) => {
       duration: featuredVideo.duration || null,
       caption: featuredVideo.caption || "",
     };
+  }
+
+  if (Array.isArray(images) && images.length > 0) {
+    postData.images = images
+      .filter((img) => img && img.url)
+      .map((img) => ({
+        url: String(img.url).trim(),
+        alt: String(img.alt || title || "").trim(),
+        caption: String(img.caption || "").trim(),
+      }));
   }
 
   // Role-based publishing workflow
@@ -808,6 +819,7 @@ const updatePost = catchAsync(async (req, res, next) => {
     tags,
     location,
     featuredImage,
+    images,
     status,
     authorDisplayName,
     isTrending,
@@ -842,7 +854,10 @@ const updatePost = catchAsync(async (req, res, next) => {
 
   if (excerpt !== undefined) updateData.excerpt = excerpt ? excerpt.trim() : "";
   if (category) updateData.category = category;
-  if (location) updateData.location = location;
+  if (location !== undefined) {
+    const normalizedLocation = String(location || "").trim();
+    updateData.location = normalizedLocation || "Kishangarh Renwal";
+  }
 
   if (tags !== undefined) {
     updateData.tags = Array.isArray(tags)
@@ -859,6 +874,18 @@ const updatePost = catchAsync(async (req, res, next) => {
           caption: featuredImage.caption || "",
         }
         : undefined;
+  }
+
+  if (images !== undefined) {
+    updateData.images = Array.isArray(images)
+      ? images
+          .filter((img) => img && img.url)
+          .map((img) => ({
+            url: String(img.url).trim(),
+            alt: String(img.alt || title || post.title || "").trim(),
+            caption: String(img.caption || "").trim(),
+          }))
+      : [];
   }
 
   // Feed flags (Trending / Featured)
@@ -1434,7 +1461,7 @@ const getPostById = catchAsync(async (req, res, next) => {
     // Select only needed fields to reduce data transfer
     // Use faster query with minimal populate
     let post = await Post.findOne(query)
-      .select("title subheading description excerpt content featuredImage featuredVideo tags category location publishedAt createdAt updatedAt likeCount commentCount shareCount viewCount slug readingTime isTrending isFeatured isPromoted status author reporterName authorDisplayName")
+      .select("title subheading description excerpt content featuredImage featuredVideo images tags category location publishedAt createdAt updatedAt likeCount commentCount shareCount viewCount slug readingTime isTrending isFeatured isPromoted status author reporterName authorDisplayName")
       .populate({
         path: "author",
         select: "username firstName lastName profileImage",
