@@ -42,6 +42,7 @@ const updatesRoutes = require("./routes/updates");
 const translateRoutes = require("./routes/translateRoutes");
 const bhaskarRoutes = require("./routes/bhaskar");
 const obituaryRoutes = require("./routes/obituaries");
+const pollRoutes = require("./routes/polls");
 
 // Initialize database
 Database.getInstance();
@@ -159,6 +160,7 @@ app.use("/api/v1/updates", updatesRoutes);
 app.use("/api/v1/translate", translateRoutes);
 app.use("/api/v1/bhaskar", bhaskarRoutes);
 app.use("/api/v1/obituaries", obituaryRoutes);
+app.use("/api/v1/polls", pollRoutes);
 
 // Handle undefined routes
 app.all("*", (req, res, next) => {
