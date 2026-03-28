@@ -348,7 +348,7 @@ const votePoll = async (req, res) => {
         voterKey,
       });
     } catch (e) {
-      if (e.code === 11000) {
+      if (e && (e.code === 11000 || e.code === 11001)) {
         return ApiResponse.error(res, "You have already voted on this poll", 400);
       }
       throw e;
