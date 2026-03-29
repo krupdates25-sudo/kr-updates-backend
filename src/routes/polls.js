@@ -1,6 +1,6 @@
 const express = require("express");
 const { body, param, query } = require("express-validator");
-const { protect, restrictTo, optionalAuth } = require("../middleware/auth");
+const { protect, restrictTo } = require("../middleware/auth");
 const {
   listActivePolls,
   getPollById,
@@ -48,18 +48,19 @@ router.post(
   createPoll,
 );
 
-router.get("/", optionalAuth, listActivePolls);
+router.get("/", listActivePolls);
 
-router.get("/:id", optionalAuth, getPollById);
+router.get("/:id", getPollById);
 
 router.post(
   "/:id/vote",
-  optionalAuth,
   [
     param("id").isMongoId().withMessage("Invalid poll id"),
     body("optionIndex").isInt({ min: 0 }).withMessage("optionIndex required"),
     body("clientId")
-      .optional()
+      .trim()
+      .notEmpty()
+      .withMessage("clientId is required for anonymous voting")
       .isString()
       .isLength({ min: 10, max: 128 }),
   ],

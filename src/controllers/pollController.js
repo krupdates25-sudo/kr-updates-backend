@@ -3,10 +3,8 @@ const Poll = require("../models/Poll");
 const PollVote = require("../models/PollVote");
 const ApiResponse = require("../utils/apiResponse");
 
+/** Anonymous-only: one vote per browser/device id. Logged-in accounts are not used for polls. */
 function buildVoterKey(req, body = {}) {
-  if (req.user && req.user._id) {
-    return `u:${req.user._id.toString()}`;
-  }
   const clientId = body.clientId || req.query?.clientId;
   if (!clientId || typeof clientId !== "string") return null;
   const trimmed = clientId.trim();
@@ -321,7 +319,7 @@ const votePoll = async (req, res) => {
     if (!voterKey) {
       return ApiResponse.error(
         res,
-        "Sign in or provide clientId (from device) to vote",
+        "Missing clientId — anonymous polls require a device id (sent automatically by the app)",
         400,
       );
     }

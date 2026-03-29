@@ -194,6 +194,13 @@ const siteSettingsSchema = new mongoose.Schema(
       primaryColor: { type: String, trim: true, default: "#2563eb" },
       accentColor: { type: String, trim: true, default: "#1d4ed8" },
     },
+    // Home feed: heading above the community notices / obituary block (any language)
+    communitySectionTitle: {
+      type: String,
+      trim: true,
+      maxlength: [120, "Community section title cannot exceed 120 characters"],
+      default: "Community remembrances",
+    },
     lastUpdatedBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

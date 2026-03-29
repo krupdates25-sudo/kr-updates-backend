@@ -132,6 +132,7 @@ const updateSettings = catchAsync(async (req, res, next) => {
     theme,
     typography,
     colorPalette,
+    communitySectionTitle,
   } = req.body;
 
   // Get or create settings
@@ -220,6 +221,9 @@ const updateSettings = catchAsync(async (req, res, next) => {
       settings.colorPalette.primaryColor = colorPalette.primaryColor;
     if (colorPalette.accentColor !== undefined)
       settings.colorPalette.accentColor = colorPalette.accentColor;
+  }
+  if (communitySectionTitle !== undefined) {
+    settings.communitySectionTitle = String(communitySectionTitle).trim();
   }
 
   // Set last updated by
