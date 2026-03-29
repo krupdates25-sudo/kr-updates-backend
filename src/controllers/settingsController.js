@@ -111,7 +111,12 @@ const getSettings = catchAsync(async (req, res, next) => {
     await settings.save();
   }
 
-  ApiResponse.success(res, settings, "Site settings retrieved successfully");
+  const payload = settings.toObject ? settings.toObject() : settings;
+  if (!payload.communitySectionTitle || !String(payload.communitySectionTitle).trim()) {
+    payload.communitySectionTitle = "Community remembrances";
+  }
+
+  ApiResponse.success(res, payload, "Site settings retrieved successfully");
 });
 
 // Update site settings (Admin only)
