@@ -19,11 +19,47 @@ const advertisementSchema = new mongoose.Schema(
       maxlength: [500, "Description cannot exceed 500 characters"],
     },
 
+    // mediaType: {
+    //   type: String,
+    //   enum: ["image", "video"],
+    //   default: "image",
+    //   required: true,
+    // },
+
+    // videoUrl: {
+    //   type: String,
+    //   required: function () {
+    //     return !this.isDraft && this.mediaType === "video";
+    //   },
+    //   validate: {
+    //     validator: function (v) {
+    //       return !v || /^https?:\/\/.+/.test(v);
+    //     },
+    //     message: "Please provide a valid video URL",
+    //   },
+    // },
+    // videoDuration: {
+    //   type: Number, // seconds, useful for analytics/UX (e.g. showing a progress bar)
+    // },
+
+    // imageUrl: {
+    //   type: String,
+    //   required: function () {
+    //     return !this.isDraft;
+    //   },
+    // },
+
     mediaType: {
       type: String,
       enum: ["image", "video"],
       default: "image",
-      required: true,
+    },
+
+    imageUrl: {
+      type: String,
+      required: function () {
+        return !this.isDraft && this.mediaType === "image";
+      },
     },
 
     videoUrl: {
@@ -31,23 +67,8 @@ const advertisementSchema = new mongoose.Schema(
       required: function () {
         return !this.isDraft && this.mediaType === "video";
       },
-      validate: {
-        validator: function (v) {
-          return !v || /^https?:\/\/.+/.test(v);
-        },
-        message: "Please provide a valid video URL",
-      },
-    },
-    videoDuration: {
-      type: Number, // seconds, useful for analytics/UX (e.g. showing a progress bar)
     },
 
-    imageUrl: {
-      type: String,
-      required: function () {
-        return !this.isDraft;
-      },
-    },
     clickUrl: {
       type: String,
       required: function () {
