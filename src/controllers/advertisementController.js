@@ -9,6 +9,7 @@ exports.createAdvertisement = catchAsync(async (req, res, next) => {
     title,
     description,
     imageUrl,
+    videoUrl,
     clickUrl,
     clientName,
     clientEmail,
@@ -27,7 +28,7 @@ exports.createAdvertisement = catchAsync(async (req, res, next) => {
   if (
     !title ||
     !description ||
-    !imageUrl ||
+    // !imageUrl ||
     !clickUrl ||
     !clientName ||
     !clientEmail ||
@@ -41,6 +42,7 @@ exports.createAdvertisement = catchAsync(async (req, res, next) => {
     title,
     description,
     imageUrl,
+    videoUrl,
     clickUrl,
     clientName,
     clientEmail,
