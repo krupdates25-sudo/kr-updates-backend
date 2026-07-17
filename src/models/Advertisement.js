@@ -319,8 +319,12 @@ advertisementSchema.statics.getActiveAds = function (
 advertisementSchema.pre("validate", function (next) {
   if (this.mediaType === "image") {
     this.videoUrl = undefined;
-    this.videoDuration = undefined;
   }
+
+  if (this.mediaType === "video") {
+    this.imageUrl = undefined;
+  }
+
   next();
 });
 module.exports = mongoose.model("Advertisement", advertisementSchema);

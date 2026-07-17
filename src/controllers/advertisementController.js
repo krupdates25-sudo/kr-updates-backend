@@ -10,6 +10,7 @@ exports.createAdvertisement = catchAsync(async (req, res, next) => {
     description,
     imageUrl,
     videoUrl,
+    mediaType,
     clickUrl,
     clientName,
     clientEmail,
@@ -24,11 +25,9 @@ exports.createAdvertisement = catchAsync(async (req, res, next) => {
     startDate,
   } = req.body;
 
-  // Validate required fields
   if (
     !title ||
     !description ||
-    // !imageUrl ||
     !clickUrl ||
     !clientName ||
     !clientEmail ||
@@ -38,23 +37,36 @@ exports.createAdvertisement = catchAsync(async (req, res, next) => {
     return next(new AppError("Please provide all required fields", 400));
   }
 
+  const finalMediaType = mediaType || (videoUrl ? "video" : "image");
+
   const advertisement = await Advertisement.create({
     title,
     description,
-    imageUrl,
-    videoUrl,
+
+    mediaType: finalMediaType,
+
+    imageUrl: finalMediaType === "image" ? imageUrl : undefined,
+
+    videoUrl: finalMediaType === "video" ? videoUrl : undefined,
+
     clickUrl,
+
     clientName,
     clientEmail,
     clientPhone,
+
     adType: adType || "banner",
     position: position || "random",
     priority: priority || 1,
+
     duration,
     budget,
+
     costPerClick: costPerClick || 0,
     targetAudience: targetAudience || {},
+
     startDate: startDate || new Date(),
+
     createdBy: req.user.id,
   });
 
@@ -64,7 +76,6 @@ exports.createAdvertisement = catchAsync(async (req, res, next) => {
       new APIResponse(201, advertisement, "Advertisement created successfully"),
     );
 });
-
 // Get all advertisements with filtering and pagination
 exports.getAllAdvertisements = catchAsync(async (req, res, next) => {
   const {
