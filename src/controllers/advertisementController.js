@@ -1,6 +1,6 @@
 const Advertisement = require("../models/Advertisement");
 const catchAsync = require("../utils/catchAsync");
-const AppError = require("../utils/appError");
+const { AppError } = require("../utils/appError");
 const APIResponse = require("../utils/apiResponse");
 
 // Create a new advertisement
