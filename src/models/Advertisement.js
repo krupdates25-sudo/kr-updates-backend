@@ -18,6 +18,30 @@ const advertisementSchema = new mongoose.Schema(
       trim: true,
       maxlength: [500, "Description cannot exceed 500 characters"],
     },
+
+    mediaType: {
+      type: String,
+      enum: ["image", "video"],
+      default: "image",
+      required: true,
+    },
+
+    videoUrl: {
+      type: String,
+      required: function () {
+        return !this.isDraft && this.mediaType === "video";
+      },
+      validate: {
+        validator: function (v) {
+          return !v || /^https?:\/\/.+/.test(v);
+        },
+        message: "Please provide a valid video URL",
+      },
+    },
+    videoDuration: {
+      type: Number, // seconds, useful for analytics/UX (e.g. showing a progress bar)
+    },
+
     imageUrl: {
       type: String,
       required: function () {
@@ -270,4 +294,12 @@ advertisementSchema.statics.getActiveAds = function (
     .populate("createdBy", "firstName lastName email");
 };
 
+// Guard: video ads must have a video, image ads must not carry a stale one
+advertisementSchema.pre("validate", function (next) {
+  if (this.mediaType === "image") {
+    this.videoUrl = undefined;
+    this.videoDuration = undefined;
+  }
+  next();
+});
 module.exports = mongoose.model("Advertisement", advertisementSchema);
